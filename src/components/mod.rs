@@ -7,24 +7,16 @@ use serde::Deserialize;
 use crate::{
     app::Meta,
     components::{
-        cpu::CPU,
-        date::{Date, DateWidget},
         diagnostics::Diagnostics,
-        net::Net,
-        niri_info::NiriInfo,
         now_playing::{NowPlaying, NowPlayingState, Preference},
-        ram::RAM,
+        provider::{ProviderLayout, ProviderLayoutType, ProviderWidget},
         visualizer::Visualizer,
     },
 };
 
-pub mod cpu;
-pub mod date;
 pub mod diagnostics;
-pub mod net;
-pub mod niri_info;
 pub mod now_playing;
-pub mod ram;
+pub mod provider;
 pub mod visualizer;
 
 #[derive(Debug, Deserialize)]
@@ -50,21 +42,18 @@ pub enum BarComponentType {
         spacing: Spacing,
         components: Vec<BarComponent>,
     },
-    Date(#[serde(default)] Date),
-    Cpu {},
-    Ram {},
-    Net {
-        adapter: String,
-    },
     NowPlaying {
         preference: Preference,
         #[serde(default)]
         #[serde(skip)]
         state: NowPlayingState,
     },
+    Provider {
+        provider: String,
+        layout: Vec<ProviderLayoutType>,
+    },
     Diagnosticts {},
     Visualizer {},
-    NiriInfo {},
 }
 
 pub struct BarComponentWidget<'a> {
@@ -117,55 +106,20 @@ impl<'a> Widget for &mut BarComponentWidget<'a> {
                     component.as_widget(self.meta).render(area, buf);
                 }
             }
-            BarComponentType::Date(date) => {
-                DateWidget {
-                    date,
-                    meta: &self.meta.time,
+            BarComponentType::Provider { provider, layout } => {
+                if let Some(meta) = self.meta.provider.providers.get(provider) {
+                    ProviderWidget {
+                        meta,
+                        layout: layout.as_slice(),
+                    }
+                    .render(
+                        area.inner(Margin {
+                            horizontal: 1,
+                            vertical: 0,
+                        }),
+                        buf,
+                    );
                 }
-                .render(
-                    area.inner(Margin {
-                        horizontal: 1,
-                        vertical: 0,
-                    }),
-                    buf,
-                );
-            }
-            BarComponentType::Cpu {} => {
-                CPU {
-                    meta: &self.meta.cpu,
-                }
-                .render(
-                    area.inner(Margin {
-                        horizontal: 1,
-                        vertical: 0,
-                    }),
-                    buf,
-                );
-            }
-            BarComponentType::Ram {} => {
-                RAM {
-                    meta: &self.meta.ram,
-                }
-                .render(
-                    area.inner(Margin {
-                        horizontal: 1,
-                        vertical: 0,
-                    }),
-                    buf,
-                );
-            }
-            BarComponentType::Net { adapter } => {
-                Net {
-                    meta: &self.meta.net,
-                    adapter,
-                }
-                .render(
-                    area.inner(Margin {
-                        horizontal: 1,
-                        vertical: 0,
-                    }),
-                    buf,
-                );
             }
             BarComponentType::NowPlaying { preference, state } => {
                 NowPlaying {
@@ -191,15 +145,6 @@ impl<'a> Widget for &mut BarComponentWidget<'a> {
                     meta: &self.meta.visualizer,
                 }
                 .render(area, buf);
-            }
-            BarComponentType::NiriInfo {} => {
-                NiriInfo { meta }.render(
-                    area.inner(Margin {
-                        horizontal: 1,
-                        vertical: 0,
-                    }),
-                    buf,
-                );
             }
         }
     }

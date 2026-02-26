@@ -7,39 +7,30 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{
-    components::{
-        cpu::CpuMeta,
-        date::DateMeta,
-        diagnostics::DiagnosticsMeta,
-        net::NetMeta,
-        now_playing::{NowPlayingMeta, PlayerInfo, SongMetadata},
-        ram::RamMeta,
-        visualizer::VisualizerMeta,
-    },
-    event::Event,
-    ui::Ui,
-};
-use async_channel::Receiver;
-use chrono::Local;
 use color_eyre::eyre::eyre;
-use niri_ipc::state::{EventStreamState, EventStreamStatePart};
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
 };
 use ratatui_image::picker::Picker;
-use sysinfo::Networks;
+use tokio::sync::mpsc::Receiver;
+
+use crate::{
+    components::{
+        diagnostics::DiagnosticsMeta,
+        now_playing::{NowPlayingMeta, PlayerInfo, SongMetadata},
+        provider::ProviderMeta,
+        visualizer::VisualizerMeta,
+    },
+    event::Event,
+    ui::Ui,
+};
 
 // #[derive(Debug)]
 pub struct Meta {
-    pub time: DateMeta,
-    pub cpu: CpuMeta,
-    pub ram: RamMeta,
-    pub net: NetMeta,
+    pub provider: ProviderMeta,
     pub now_playing: NowPlayingMeta,
     pub visualizer: VisualizerMeta,
-    pub niri_state: niri_ipc::state::EventStreamState,
     pub diagnostics: DiagnosticsMeta,
 }
 
@@ -76,27 +67,14 @@ impl<T: Default + Clone> Record<T> {
 impl Default for Meta {
     fn default() -> Self {
         Self {
-            cpu: CpuMeta {
-                temp: 0.0,
-                freq: 0,
-                load: Record::new(16),
-            },
-            ram: RamMeta {
-                total: 0,
-                free: 0,
-                used: Record::new(16),
-            },
-            net: NetMeta {
-                networks: Networks::new(),
-                refresh_rate: Duration::from_secs(1),
+            provider: ProviderMeta {
+                providers: HashMap::new(),
             },
             now_playing: NowPlayingMeta {
                 players: Default::default(),
             },
             visualizer: VisualizerMeta::new(16, 256),
             diagnostics: DiagnosticsMeta::default(),
-            niri_state: EventStreamState::default(),
-            time: DateMeta { time: Local::now() },
         }
     }
 }
@@ -106,14 +84,8 @@ impl App {
     pub async fn new(
         running: Arc<AtomicBool>,
         events: Receiver<Event>,
+        ui: Ui,
     ) -> color_eyre::Result<Self> {
-        let dir = dirs::config_local_dir()
-            .ok_or_else(|| eyre!("couldn't find config directory"))?
-            .join("rat-bar/config.yaml");
-        let config = tokio::fs::read(dir).await?;
-        let ui = Ui {
-            component: serde_yaml::from_slice(&config)?,
-        };
         Ok(Self {
             meta: Default::default(),
             picker: Picker::from_query_stdio()?,
@@ -139,7 +111,11 @@ impl App {
             self.meta.diagnostics.total_ticks += 1;
             self.meta.diagnostics.queued_events = self.events.len() as u64;
 
-            let event = self.events.recv().await?;
+            let event = self
+                .events
+                .recv()
+                .await
+                .ok_or_else(|| eyre!("channel closed"))?;
 
             let event_now = Instant::now();
             match event {
@@ -156,19 +132,6 @@ impl App {
                     }
                 }
 
-                Event::UpdateSysinfo { cpu, ram, net } => {
-                    self.meta.cpu.update(cpu);
-                    self.meta.ram.update(ram);
-                    self.meta.net.update(net);
-                    self.meta.diagnostics.event_times.sysinfo = event_now.elapsed();
-                }
-                Event::UpdateTime => {
-                    self.meta.time.time = Local::now();
-                }
-                Event::NiriEvent { event } => {
-                    self.meta.niri_state.apply(event);
-                    self.meta.diagnostics.event_times.niri = event_now.elapsed();
-                }
                 Event::UpdatePlayers { players } => {
                     for (id, player) in players.into_iter() {
                         let map = self
@@ -205,6 +168,12 @@ impl App {
                         .for_each(|bins| bins.iter_mut().for_each(|bin| *bin *= scale));
                     self.meta.visualizer.data[0] = frequencies;
                     self.meta.diagnostics.event_times.visualizer = event_now.elapsed()
+                }
+                Event::UpdateProviders { providers } => {
+                    self.meta.provider = providers;
+                }
+                Event::UpdateProvider { name, provider } => {
+                    self.meta.provider.providers.insert(name, provider);
                 }
             }
             self.meta.diagnostics.event_time = event_now.elapsed();

@@ -1,0 +1,145 @@
+component_type: !Group
+  components:
+    - block:
+        title: FOCUS
+      component_type: !Provider
+        provider: niri-window
+        layout:
+          - !Text "${app_id} | ${title}"
+          - !VGroup
+            center: false
+            elements:
+              - !Text "${app_id}"
+              - !Text "${title}"
+
+    - block:
+        title: VISUALIZER
+      constraint: !Length 35
+      component_type: !Visualizer
+
+    - block:
+        title: CLOCK
+      constraint: !Length 30
+      component_type: !Provider
+        provider: clock
+        layout:
+          - !HGroup
+            elements:
+              - !Text "${day}"
+              - !Text "${time}"
+              - !Text "${date}"
+          - !HGroup
+            elements:
+              - !VGroup
+                elements:
+                  - !Text "DAY"
+                  - !Text "${day}"
+              - !VGroup
+                elements:
+                  - !Text "TIME"
+                  - !Text "${time}"
+              - !VGroup
+                elements:
+                  - !Text "DATE"
+                  - !Text "${date}"
+
+    - block:
+        title: "NOW PLAYING"
+      constraint: !Length 60
+      component_type: !NowPlaying
+        preference:
+          players:
+            - Cider
+            - Spotify
+            - Mozilla firefox
+          at_least: !Playing
+
+    - block:
+        title: CPU
+      constraint: !Length 20
+      component_type: !Provider
+        provider: cpu
+        layout:
+          - !HGroup
+            elements:
+              - !Text "${load}%"
+              - !Bar
+                direction: !Horizontal
+                var: load              
+          - !HGroup
+            elements:
+                - !VGroup
+                  elements:
+                  - !Text "LOAD"
+                  - !Text "${load}%"
+                - !Graph
+                  var: acc
+
+    - block:
+        title: MEM
+      constraint: !Length 17
+      component_type: !Provider
+        provider: mem
+        layout:
+          - !HGroup
+            elements:
+              - !Text "${used}GB/${total}GB"
+              - !Bar
+                direction: !Horizontal
+                var: percent
+          # - !VGroup
+          #   elements:
+          #     - !Text "${used}GB/${total}GB"
+          #     - !Bar
+          #       direction: !Horizontal
+          #       var: percent
+          - !HGroup
+            elements:
+              - !VGroup
+                elements:
+                  - !Text "${used}GB"
+                  - !Text "${total}GB"
+              - !Bar
+                direction: !Vertical
+                var: percent
+      
+    - block:
+        title: NET
+      constraint: !Length 16
+      component_type: !Provider
+        provider: net
+        layout:
+          - !HGroup
+            elements:
+              - !Text "RX: ${recv}"
+              - !Text "TX: ${sent}"
+          - !VGroup
+            center: false
+            elements:
+              - !Text "RX: ${recv}MB/S"
+              - !Text "TX: ${sent}MB/S"
+
+    - block:
+        title: BAT
+      constraint: !Length 15
+      component_type: !Provider
+        provider: battery
+        layout:
+          - !Text "${charge}% | ${status}"
+          # - !VGroup
+          #   center: false
+          #   elements:
+          #     - !Text "${charge}% | ${status}"
+          #     - !Bar
+          #       direction: !Horizontal
+          #       var: charge
+          - !VGroup
+            center: true
+            elements:
+              - !Text "${status}"
+              - !HGroup
+                elements:
+                  - !Text "${charge}%"
+                  - !Bar
+                    direction: !Horizontal
+                    var: charge

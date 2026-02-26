@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use async_channel::Sender;
+use color_eyre::eyre::eyre;
 use itertools::Itertools;
 use pipewire::{
     self as pw,
@@ -25,9 +25,10 @@ use pipewire::{
 use pipewire::{context::ContextBox, properties::properties};
 use ratatui::widgets::{Paragraph, Widget};
 use rustfft::num_complex::Complex32;
+use tokio::sync::mpsc::Sender;
 
 use crate::{
-    event::{AppEvent, Event},
+    event::Event,
     widgets::{bar_graph::BarGraph, graph::GraphWidget},
 };
 
@@ -89,7 +90,7 @@ pub async fn visualizer_events(
     sender: Sender<Event>,
     running: Arc<AtomicBool>,
 ) -> color_eyre::Result<()> {
-    let (sample_sender, sample_receiver) = async_channel::unbounded();
+    let (sample_sender, mut sample_receiver) = tokio::sync::mpsc::channel(32);
 
     tokio::task::spawn_blocking(move || -> color_eyre::Result<()> {
         let mainloop = MainLoopRc::new(None)?;
@@ -160,7 +161,7 @@ pub async fn visualizer_events(
                             .sum()
                     })
                     .collect::<Vec<_>>();
-                let _ = sample_sender.send_blocking((samples, user_data.format.rate()));
+                let _ = sample_sender.blocking_send((samples, user_data.format.rate()));
             })
             .register()?;
 
@@ -207,7 +208,8 @@ pub async fn visualizer_events(
 
     let mut scratch_buffer = sample_receiver
         .recv()
-        .await?
+        .await
+        .ok_or_else(|| eyre!("channel closed"))?
         .0
         .iter()
         .map(|_| Complex32 { re: 0.0, im: 0.0 })
@@ -220,7 +222,10 @@ pub async fn visualizer_events(
     let mut acc_buffer = Vec::<f32>::new();
 
     loop {
-        let (frequencies, sample_rate) = sample_receiver.recv().await?;
+        let (frequencies, sample_rate) = sample_receiver
+            .recv()
+            .await
+            .ok_or_else(|| eyre!("channel closed"))?;
         acc_buffer.extend(frequencies.iter());
         if acc_buffer.len() < 1024 {
             continue;

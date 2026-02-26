@@ -1,0 +1,50 @@
+battery:
+  update: null
+  command:
+    - nu
+    - ~/.config/rat-bar/provider.nu
+    - battery
+    - 1sec
+    - BAT0
+
+niri-window:
+  update: null
+  command:
+    - nu
+    - ~/.config/rat-bar/provider.nu
+    - niri-focus
+
+cpu:
+  update: null
+  command:
+    - nu
+    - ~/.config/rat-bar/provider.nu
+    - cpu
+    - 1sec
+    - "coretemp Core 1"
+    - 12
+
+mem:
+  update: null
+  command:
+    - nu
+    - ~/.config/rat-bar/provider.nu
+    - mem
+    - 1sec
+
+net:
+  update: null
+  command:
+    - nu
+    - ~/.config/rat-bar/provider.nu
+    - net
+    - 1sec
+    - wlp229s0
+
+clock:
+  update: null
+  command:
+    - nu
+    - ~/.config/rat-bar/provider.nu
+    - clock
+    - 1sec

@@ -1,6 +1,5 @@
 use std::{collections::HashMap, fmt::Debug, time::Duration};
 
-use async_channel::Sender;
 use image::{DynamicImage, load_from_memory};
 use ratatui::{
     layout::{Constraint, Direction, Flex, Layout, Size},
@@ -10,6 +9,7 @@ use ratatui::{
 };
 use ratatui_image::{FilterType, Resize, picker::Picker, protocol::Protocol};
 use serde::Deserialize;
+use tokio::sync::mpsc::Sender;
 use zbus::{
     Connection,
     fdo::DBusProxy,
