@@ -25,8 +25,9 @@ rustPlatform.buildRustPackage (finalAttrs: {
   ];
   runtimeInputs = [ ];
   meta = {
+    mainProgram = "rat-bar";
     description = "";
-    homepage = "";
+    homepage = "https://github.com/van-nessing/rat-bar";
     license = lib.licenses.mit;
     maintainers = [ ];
   };
