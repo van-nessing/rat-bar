@@ -19,7 +19,7 @@ use crate::{
     components::{
         diagnostics::DiagnosticsMeta,
         now_playing::{NowPlayingMeta, PlayerInfo, SongMetadata},
-        provider::ProviderMeta,
+        provider::{Provider, ProviderMeta},
         visualizer::VisualizerMeta,
     },
     event::Event,
@@ -172,8 +172,17 @@ impl App {
                 Event::UpdateProviders { providers } => {
                     self.meta.provider = providers;
                 }
-                Event::UpdateProvider { name, provider } => {
-                    self.meta.provider.providers.insert(name, provider);
+                Event::UpdateProvider { name, variables } => {
+                    self.meta
+                        .provider
+                        .providers
+                        .entry(name)
+                        .or_insert(Provider {
+                            variables: Default::default(),
+                        })
+                        .update(variables);
+                    // self.meta.provider
+                    // self.meta.provider.providers.insert(name, provider);
                 }
             }
             self.meta.diagnostics.event_time = event_now.elapsed();

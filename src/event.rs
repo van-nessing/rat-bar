@@ -1,5 +1,6 @@
 use futures_concurrency::future::Race;
 use ratatui::crossterm::event::Event as CrosstermEvent;
+use serde_json::Value;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::AtomicBool},
@@ -32,7 +33,7 @@ pub enum Event {
     },
     UpdateProvider {
         name: String,
-        provider: Provider,
+        variables: HashMap<String, Value>,
     },
 }
 

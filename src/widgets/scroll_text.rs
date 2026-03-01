@@ -18,6 +18,7 @@ pub struct ScrollTextState {
     rest_duration: Duration,
     last_scroll: Instant,
 }
+
 impl Default for ScrollTextState {
     fn default() -> Self {
         Self {
@@ -28,6 +29,7 @@ impl Default for ScrollTextState {
         }
     }
 }
+
 impl ScrollTextState {
     pub fn new(interval: Duration, rest: Duration) -> Self {
         Self {
@@ -36,6 +38,10 @@ impl ScrollTextState {
             rest_duration: rest,
             last_scroll: Instant::now(),
         }
+    }
+    pub fn reset(&mut self) {
+        self.offset = 0;
+        self.last_scroll = Instant::now();
     }
     pub fn tick(&mut self, line: &Line<'_>, area: Rect, now: Instant) {
         let elapsed = now.duration_since(self.last_scroll);

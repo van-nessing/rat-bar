@@ -110,7 +110,7 @@ impl<'a> Widget for &mut BarComponentWidget<'a> {
                 if let Some(meta) = self.meta.provider.providers.get(provider) {
                     ProviderWidget {
                         meta,
-                        layout: layout.as_slice(),
+                        layout: layout.as_mut_slice(),
                     }
                     .render(
                         area.inner(Margin {

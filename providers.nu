@@ -15,25 +15,64 @@ def "main cpu" [
             | skip
             | each { into int }
     }
-    mut accumulated: list = 0..$acc_count | each { 0.0 };
+    mut acc: list = 0..<$acc_count | each { 0.0 };
     mut prev = do $stat | each { 0 }
     loop {
+        let time = date now;
         let now = do $stat
         let delta = $prev | zip $now | each { $in.0 - $in.1 }
         let total = $delta | math sum
         let load = (1 - ($delta.3 / $total)) * 100 | math round -p 1
         let freq = sys cpu | get freq | math avg | $in / 1000 | math round -p 1  
-        let temp = sys temp | where unit == $temp_sensor | first | get temp
+        let temp = sys temp | where unit == $temp_sensor | first | get temp | into int
         $prev = $now
-        $accumulated = $accumulated | append $load | skip
+        $acc = $acc | append $load | skip
         let out = {
             load: $load
             freq: $freq
             temp: $temp
-            acc: $accumulated
+            acc: $acc
         };
         $out | to json -r | print 
-        sleep $interval
+        let delta = (date now) - $time
+        sleep ($interval - $delta)
+    }
+}
+# Get gpu information
+#     variables = []
+def "main nvidia" [
+    interval: duration # Interval at which messages get sent
+    acc_count: int # Number of datapoints for accumulated data
+]: [] {
+    let memory_q = [used free total] | each { "memory." ++ $in }
+    let util_q  = ["utilization.gpu"] 
+    let temp_q = ["temperature.gpu"]
+    let power_q = ["power.draw.instant"]
+    let queries = $util_q ++ $temp_q ++ $power_q ++ $memory_q | str join ,
+    mut acc = 0..<$acc_count | each { 0 };
+
+    let stat = {
+        nvidia-smi --query-gpu=$"($queries)" --format=csv
+        | from csv --trim all
+        | rename --block { split row ' ' | first }
+        | update cells -c $memory_q { str replace ' ' '' | into filesize | into int | $in / (1GB | into int) | math round -p 1 } 
+        | update cells -c $util_q { split words | first | into float | math round -p 1 }
+        | update cells -c $power_q { split words | first | into int }
+        | first
+    }
+
+
+    loop {
+        let time = date now
+        let $out = do $stat
+        let percent = ($out."memory.used" / $out."memory.total") * 100
+
+        $acc = $acc | append $out."utilization.gpu" | skip 
+
+        $out| insert acc $acc | insert percent $percent | to json -r | print
+
+        let delta = (date now) - $time
+        sleep ($interval - $delta)
     }
 }
 
@@ -69,6 +108,7 @@ def "main net" [
     let net = { sys net | where name == $device | reject name ip mac | into record }
     mut prev = do $net
     loop {
+        let time = date now
         let now = do $net
         let tmp = $prev
         let secs = ($interval | into int) / (1sec | into int)
@@ -80,7 +120,8 @@ def "main net" [
 
         $prev = $now
         $out | to json -r | print -r
-        sleep $interval
+        let delta = (date now) - $time
+        sleep ($interval - $delta)
     }
 }
 
@@ -96,6 +137,7 @@ def "main battery" [
         ($now / $full) * 100 | into int | append 100 | math min
     };
     loop {
+        let time = date now;
         let charge = do $charge 
         let status = open $"/sys/class/power_supply/($device)/status";
         let out = {
@@ -103,7 +145,8 @@ def "main battery" [
             status: $status
         }
         $out | to json -r | print -r
-        sleep $interval
+        let delta = (date now) - $time
+        sleep ($interval - $delta)
     }
 }
 
@@ -120,7 +163,8 @@ def "main clock" [
             date: ($now | format date "%d.%m.%Y")
         };
         $out | to json -r | print -r
-        sleep $interval
+        let delta = (date now) - $now
+        sleep ($interval - $delta)
     }
 }
 

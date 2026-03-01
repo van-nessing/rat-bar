@@ -6,11 +6,14 @@ use lazy_static::lazy_static;
 use ratatui::{
     layout::{Constraint, Direction, Flex, Layout},
     style::Style,
+    text::Line,
+    widgets::StatefulWidget,
     widgets::Widget,
 };
 use regex::Captures;
 use serde::Deserialize;
 use serde_json::Value;
+use serde_with::{FromInto, serde_as};
 use tokio::sync::mpsc::Sender;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -19,7 +22,11 @@ use tokio::{
 
 use crate::{
     event::Event,
-    widgets::{graph::GraphWidget, percentage_bar::BlockPercentageBar},
+    widgets::{
+        graph::GraphWidget,
+        percentage_bar::BlockPercentageBar,
+        scroll_text::{ScrollText, ScrollTextState},
+    },
 };
 
 #[derive(Debug)]
@@ -29,7 +36,12 @@ pub struct ProviderMeta {
 
 #[derive(Debug)]
 pub struct Provider {
-    pub variables: HashMap<String, Value>,
+    pub variables: HashMap<String, Variable>,
+}
+
+#[derive(Debug)]
+pub struct Variable {
+    pub value: Value,
 }
 
 pub struct ProviderProcess {
@@ -38,15 +50,19 @@ pub struct ProviderProcess {
 }
 
 pub struct ProviderLayout<'a> {
-    pub variables: &'a HashMap<String, Value>,
-    pub layout: &'a ProviderLayoutType,
+    pub variables: &'a HashMap<String, Variable>,
+    pub layout: &'a mut ProviderLayoutType,
 }
+
 fn default_true() -> bool {
     true
 }
+
 fn default_flex() -> Flex {
     Flex::SpaceBetween
 }
+
+#[serde_as]
 #[derive(Debug, Deserialize)]
 pub enum ProviderLayoutType {
     HGroup {
@@ -65,7 +81,7 @@ pub enum ProviderLayoutType {
         center: bool,
         elements: Vec<ProviderLayoutType>,
     },
-    Text(String),
+    Text(#[serde_as(as = "FromInto<String>")] Text),
     Bar {
         #[serde(default)]
         width: Constraint,
@@ -79,12 +95,37 @@ pub enum ProviderLayoutType {
     },
 }
 
+#[derive(Debug)]
+pub struct Text {
+    string: String,
+    state: ScrollTextState,
+}
+
+impl From<String> for Text {
+    fn from(string: String) -> Self {
+        Self {
+            string,
+            state: Default::default(),
+        }
+    }
+}
+
 pub struct ProviderWidget<'a> {
     pub meta: &'a Provider,
-    pub layout: &'a [ProviderLayoutType],
+    pub layout: &'a mut [ProviderLayoutType],
 }
+
+impl Provider {
+    pub fn update(&mut self, other: HashMap<String, Value>) {
+        self.variables = other
+            .into_iter()
+            .map(|(var, val)| (var, Variable { value: val }))
+            .collect();
+    }
+}
+
 impl ProviderLayoutType {
-    pub fn width(&self, variables: &HashMap<String, Value>) -> Constraint {
+    pub fn width(&self, variables: &HashMap<String, Variable>) -> Constraint {
         match self {
             ProviderLayoutType::HGroup {
                 width,
@@ -115,7 +156,7 @@ impl ProviderLayoutType {
                 }
             }
             ProviderLayoutType::Text(text) => {
-                Constraint::Length(interpolate(text, variables).chars().count() as u16)
+                Constraint::Length(interpolate(&text.string, variables).chars().count() as u16)
             }
             ProviderLayoutType::Bar {
                 width,
@@ -138,7 +179,7 @@ impl ProviderLayoutType {
                 center,
                 elements,
             } => Constraint::Fill(1),
-            ProviderLayoutType::Text(_) => Constraint::Length(1),
+            ProviderLayoutType::Text(..) => Constraint::Length(1),
             ProviderLayoutType::Bar {
                 width,
                 direction,
@@ -153,11 +194,11 @@ impl ProviderLayoutType {
 }
 
 impl Widget for ProviderLayout<'_> {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
+    fn render(mut self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
     {
-        match &self.layout {
+        match &mut self.layout {
             ProviderLayoutType::HGroup {
                 width,
                 flex,
@@ -166,7 +207,7 @@ impl Widget for ProviderLayout<'_> {
                 let constraints = elements.iter().map(|element| element.width(self.variables));
                 let layout =
                     area.layout_vec(&Layout::horizontal(constraints).spacing(1).flex(*flex));
-                for (area, element) in layout.into_iter().zip(elements.iter()) {
+                for (area, element) in layout.into_iter().zip(elements.iter_mut()) {
                     ProviderLayout {
                         variables: self.variables,
                         layout: element,
@@ -182,7 +223,7 @@ impl Widget for ProviderLayout<'_> {
             } => {
                 let constraints = elements.iter().map(ProviderLayoutType::height);
                 let layout = area.layout_vec(&Layout::vertical(constraints));
-                for (mut area, element) in layout.into_iter().zip(elements.iter()) {
+                for (mut area, element) in layout.into_iter().zip(elements.iter_mut()) {
                     if *center {
                         area = area.centered_horizontally(element.width(self.variables));
                     }
@@ -194,15 +235,19 @@ impl Widget for ProviderLayout<'_> {
                 }
             }
             ProviderLayoutType::Text(text) => {
-                let text = interpolate(text, self.variables);
-                text.render(area, buf);
+                let string = interpolate(&text.string, self.variables);
+                ScrollText {
+                    line: Line::raw(string),
+                }
+                .render(area, buf, &mut text.state);
             }
             ProviderLayoutType::Bar {
                 width,
                 direction,
                 var,
             } => {
-                if let Some(percentage) = self.variables.get(var).and_then(|val| val.as_f64()) {
+                if let Some(percentage) = self.variables.get(var).and_then(|var| var.value.as_f64())
+                {
                     BlockPercentageBar {
                         style: Style::new().on_dark_gray(),
                         percentage: percentage as f32,
@@ -215,7 +260,7 @@ impl Widget for ProviderLayout<'_> {
                 if let Some(data) = self
                     .variables
                     .get(var)
-                    .and_then(|val| val.as_array())
+                    .and_then(|var| var.value.as_array())
                     .and_then(|val| {
                         val.iter()
                             .map(|val| val.as_f64().map(|val| val as f32))
@@ -241,10 +286,13 @@ impl Widget for ProviderWidget<'_> {
         if area.height == 0 {
             return;
         }
-        let layout = self
-            .layout
-            .get(area.height as usize - 1)
-            .unwrap_or_else(|| self.layout.last().unwrap());
+        let layout = self.layout.get_mut(area.height as usize - 1);
+
+        let layout = if let Some(layout) = layout {
+            layout
+        } else {
+            self.layout.last_mut().unwrap()
+        };
         ProviderLayout {
             variables: &self.meta.variables,
             layout,
@@ -252,20 +300,21 @@ impl Widget for ProviderWidget<'_> {
         .render(area, buf);
     }
 }
+
 lazy_static! {
-    static ref REGEX: regex::Regex = regex::Regex::new(r"\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}").unwrap();
+    static ref REGEX: regex::Regex = regex::Regex::new(r"\$\{([^${}]*)\}").unwrap();
 }
 
-pub fn interpolate<'a>(string: &'a str, variables: &'_ HashMap<String, Value>) -> Cow<'a, str> {
+pub fn interpolate<'a>(string: &'a str, variables: &'_ HashMap<String, Variable>) -> Cow<'a, str> {
     REGEX.replace_all(string, |captures: &Captures| {
         let name = captures.get(1).unwrap();
         variables
             .get(name.as_str())
-            .map(|val| {
-                if let Value::String(string) = val {
+            .map(|var| {
+                if let Value::String(string) = &var.value {
                     Cow::Borrowed(string.as_str())
                 } else {
-                    Cow::Owned(val.to_string())
+                    Cow::Owned(var.value.to_string())
                 }
             })
             .unwrap_or(Cow::Borrowed("UNDEFINED"))
@@ -333,7 +382,7 @@ pub async fn provider_events(
                             sender
                                 .send(Event::UpdateProvider {
                                     name: name.clone(),
-                                    provider: Provider { variables },
+                                    variables,
                                 })
                                 .await?;
                             timer.tick().await;
@@ -349,7 +398,7 @@ pub async fn provider_events(
                             sender
                                 .send(Event::UpdateProvider {
                                     name: name.clone(),
-                                    provider: Provider { variables },
+                                    variables,
                                 })
                                 .await?;
                         }
