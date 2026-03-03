@@ -2,7 +2,6 @@
   lib,
   rustPlatform,
   pkg-config,
-  dbus,
   pipewire,
 }:
 let
@@ -20,7 +19,6 @@ rustPlatform.buildRustPackage (finalAttrs: {
     rustPlatform.bindgenHook
   ];
   buildInputs = [
-    dbus
     pipewire
   ];
   runtimeInputs = [ ];
