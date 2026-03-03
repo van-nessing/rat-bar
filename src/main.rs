@@ -11,14 +11,17 @@ use futures_concurrency::future::Race;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
 use crate::{
-    app::App, components::visualizer::visualizer_events, config::Provider, event::EventTask,
-    ui::Ui, widgets::bar_graph::BarGraph,
+    app::App,
+    components::{BarComponent, visualizer::visualizer_events},
+    config::Provider,
+    event::EventTask,
+    ui::Ui,
+    widgets::bar_graph::BarGraph,
 };
 
 pub mod app;
 pub mod components;
 pub mod config;
-pub mod dbus_integration;
 pub mod event;
 pub mod theme;
 pub mod ui;
@@ -28,35 +31,32 @@ pub mod widgets;
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let (sender, receiver) = tokio::sync::mpsc::channel(32);
+    let (event_sender, event_receiver) = tokio::sync::mpsc::channel(32);
+    let (request_sender, request_receiver) = tokio::sync::mpsc::channel(32);
 
     let running = Arc::new(AtomicBool::new(true));
     let dir = dirs::config_local_dir()
         .ok_or_else(|| eyre!("couldn't find config directory"))?
         .join("rat-bar");
-    let file = tokio::fs::read(dir.join("layout.yaml")).await?;
-    let ui = Ui {
-        component: serde_yaml::from_slice(&file)?,
-    };
-    let app = App::new(running.clone(), receiver, ui).await?;
 
+    let file = tokio::fs::read(dir.join("layout.yaml")).await?;
+    let components: Vec<BarComponent> = serde_yaml::from_slice(&file)?;
+    let ui = Ui {
+        component: BarComponent {
+            constraint: ratatui::layout::Constraint::Fill(1),
+            block: None,
+            component_type: components::BarComponentType::Group {
+                flex: ratatui::layout::Flex::SpaceAround,
+                spacing: 0.into(),
+                components,
+            },
+        },
+    };
     let file = tokio::fs::read(dir.join("providers.yaml")).await?;
     let providers = serde_yaml::from_slice(&file)?;
-    // let providers = [(
-    //     "Battery".to_string(),
-    //     Provider {
-    //         tick_duration: Some(Duration::from_secs(1)),
-    //         command: vec![
-    //             "nu".to_string(),
-    //             "--stdin".to_string(),
-    //             "~/.config/rat-bar/providers/battery.nu".to_string(),
-    //         ],
-    //     },
-    // )]
-    // .into_iter()
-    // .collect::<HashMap<_, _>>();
 
-    let dispatcher = EventTask::new(running.clone(), sender, providers);
+    let app = App::new(running.clone(), event_receiver, request_sender, ui).await?;
+    let dispatcher = EventTask::new(running.clone(), event_sender, request_receiver, providers)?;
 
     let terminal = ratatui::init();
 

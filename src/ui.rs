@@ -16,6 +16,9 @@ impl Widget for &mut App {
     // - https://docs.rs/ratatui/latest/ratatui/widgets/index.html
     // - https://github.com/ratatui/ratatui/tree/master/examples
     fn render(self, area: Rect, buf: &mut Buffer) {
-        self.ui.component.as_widget(&self.meta).render(area, buf);
+        self.ui
+            .component
+            .as_widget(&mut self.meta, &mut self.requests)
+            .render(area, buf);
     }
 }

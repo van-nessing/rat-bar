@@ -1,145 +1,212 @@
-component_type: !Group
-  components:
-    - block:
-        title: FOCUS
-      component_type: !Provider
-        provider: niri-window
-        layout:
-          - !Text "${app_id} | ${title}"
+- block:
+    title: FOCUS
+  component_type: !Provider
+    # Name of the provider defined in providers.yaml
+    provider: niri-window
+    # Each item in `layout` corresponds to a bar height
+    # The first element will get picked if height is 1, the second if height is 2 etc.
+    # If the bar is taller than there are elements the last one will get picked
+    layout:
+      # Text elements can get variables from providers using ${var_name} syntax
+      # You can also style them using $style_name(some text), currently the only style name is ul for underlined text
+      # Obviously you can also style variables
+      - !Text "${app_id} | $ul(${title})"
+      - !VGroup
+        # VGroup elements create a vertical group
+        # Make text not centered
+        center: false
+        elements:
+          - !Text "${app_id}"
+          - !Text "${title}"
+# Check out the now playing component to see how to display an image
+- block:
+    title: VISUALIZER
+  constraint: !Length 35
+  component_type: !Visualizer
+- block:
+    title: CLOCK
+  constraint: !Length 30
+  component_type: !Provider
+    provider: clock
+    layout:
+      - !HGroup
+        elements:
+          - !Text "${day}"
+          - !Text "${time}"
+          - !Text "${date}"
+      - !HGroup
+        elements:
           - !VGroup
-            center: false
             elements:
-              - !Text "${app_id}"
-              - !Text "${title}"
-
-    - block:
-        title: VISUALIZER
-      constraint: !Length 35
-      component_type: !Visualizer
-
-    - block:
-        title: CLOCK
-      constraint: !Length 30
-      component_type: !Provider
-        provider: clock
-        layout:
-          - !HGroup
-            elements:
+              - !Text "DAY"
               - !Text "${day}"
+          - !VGroup
+            elements:
+              - !Text "TIME"
               - !Text "${time}"
+          - !VGroup
+            elements:
+              - !Text "DATE"
               - !Text "${date}"
-          - !HGroup
-            elements:
-              - !VGroup
-                elements:
-                  - !Text "DAY"
-                  - !Text "${day}"
-              - !VGroup
-                elements:
-                  - !Text "TIME"
-                  - !Text "${time}"
-              - !VGroup
-                elements:
-                  - !Text "DATE"
-                  - !Text "${date}"
-
-    - block:
-        title: "NOW PLAYING"
-      constraint: !Length 60
-      component_type: !NowPlaying
-        preference:
-          players:
-            - Cider
-            - Spotify
-            - Mozilla firefox
-          at_least: !Playing
-
-    - block:
-        title: CPU
-      constraint: !Length 20
-      component_type: !Provider
-        provider: cpu
-        layout:
-          - !HGroup
-            elements:
-              - !Text "${load}%"
-              - !Bar
-                direction: !Horizontal
-                var: load              
-          - !HGroup
-            elements:
-                - !VGroup
-                  elements:
-                  - !Text "LOAD"
-                  - !Text "${load}%"
-                - !Graph
-                  var: acc
-
-    - block:
-        title: MEM
-      constraint: !Length 17
-      component_type: !Provider
-        provider: mem
-        layout:
-          - !HGroup
-            elements:
-              - !Text "${used}GB/${total}GB"
-              - !Bar
-                direction: !Horizontal
-                var: percent
-          # - !VGroup
-          #   elements:
-          #     - !Text "${used}GB/${total}GB"
-          #     - !Bar
-          #       direction: !Horizontal
-          #       var: percent
-          - !HGroup
-            elements:
-              - !VGroup
-                elements:
-                  - !Text "${used}GB"
-                  - !Text "${total}GB"
-              - !Bar
-                direction: !Vertical
-                var: percent
-      
-    - block:
-        title: NET
-      constraint: !Length 16
-      component_type: !Provider
-        provider: net
-        layout:
-          - !HGroup
-            elements:
-              - !Text "RX: ${recv}"
-              - !Text "TX: ${sent}"
+- block:
+    title: "NOW PLAYING"
+  constraint: !Length 60
+  component_type: !Provider
+    # Select provider from providers.yaml
+    provider: now-playing
+    layout:
+      - !HGroup
+        # HGroup creates a horizontal group
+        elements:
+          - !Image
+            # Image displays an image that uses your terminal capabilities
+            # Fixed width of the image
+            width: 5
+            # Variable contains the path of the image
+            var: art
           - !VGroup
-            center: false
+            width: !Percentage 60
             elements:
-              - !Text "RX: ${recv}MB/S"
-              - !Text "TX: ${sent}MB/S"
-
-    - block:
-        title: BAT
-      constraint: !Length 15
-      component_type: !Provider
-        provider: battery
-        layout:
-          - !Text "${charge}% | ${status}"
-          # - !VGroup
-          #   center: false
-          #   elements:
-          #     - !Text "${charge}% | ${status}"
-          #     - !Bar
-          #       direction: !Horizontal
-          #       var: charge
+              - !Text "${title}"
+              - !Text "$ul(${album}) - $ul(${artist})"
+          # Make sure this has enough space, otherwise the buttons and time will start scrolling O.O
           - !VGroup
-            center: true
+            width: !Percentage 40
             elements:
-              - !Text "${status}"
               - !HGroup
                 elements:
-                  - !Text "${charge}%"
-                  - !Bar
-                    direction: !Horizontal
-                    var: charge
+                  - !Text "${buttons}"
+                  - !Text "${position}/${length}"
+              - !Bar
+                direction: !Horizontal
+                # Values range from 0-100
+                var: progress
+- block:
+    title: CPU
+  constraint: !Length 35
+  component_type: !Provider
+    provider: cpu
+    layout:
+      - !HGroup
+        elements:
+          - !Text "${load}%"
+          - !Bar
+            direction: !Horizontal
+            var: load
+      - !HGroup
+        elements:
+          - !VGroup
+            elements:
+              - !Text "LOAD"
+              - !Text "${load}%"
+          - !VGroup
+            elements:
+              - !Text "FREQ"
+              - !Text "${freq}Ghz"
+          - !VGroup
+            elements:
+              - !Text "TEMP"
+              - !Text "${temp}°C"
+          - !Graph
+            var: acc
+- block:
+    title: GPU
+  constraint: !Length 35
+  component_type: !Provider
+    provider: nvidia
+    layout:
+      - !HGroup
+        elements:
+          - !Text "${utilization.gpu}%"
+          - !Bar
+            direction: !Horizontal
+            var: load
+      - !HGroup
+        elements:
+          - !VGroup
+            elements:
+              - !Text "LOAD"
+              - !Text "${utilization.gpu}%"
+          - !VGroup
+            # - !VGroup
+            #   elements:
+            #   - !Text "WATT"
+            #   - !Text "${power.draw.instant}W"
+            # - !VGroup
+            #   elements:
+            #   - !Text "TEMP"
+            #   - !Text "${temperature.gpu}°C"
+            elements:
+              - !Text "USED"
+              - !Text "${memory.used}GB"
+          - !VGroup
+            elements:
+              - !Text "FREE"
+              - !Text "${memory.free}GB"
+          - !Bar
+            width: !Length 2
+            direction: !Vertical
+            var: percent
+          - !Graph
+            var: acc
+- block:
+    title: MEM
+  constraint: !Length 20
+  component_type: !Provider
+    provider: mem
+    layout:
+      - !HGroup
+        elements:
+          - !Text "${used}GB/${total}GB"
+          - !Bar
+            direction: !Horizontal
+            var: percent
+      - !HGroup
+        elements:
+          - !VGroup
+            elements:
+              - !Text "FREE: ${available}GB"
+              - !Text "USED: ${used}GB"
+          - !Bar
+            direction: !Vertical
+            var: percent
+- block:
+    title: NET
+  constraint: !Length 16
+  component_type: !Provider
+    provider: net
+    layout:
+      - !HGroup
+        elements:
+          - !Text "RX: ${recv}"
+          - !Text "TX: ${sent}"
+      - !VGroup
+        center: false
+        elements:
+          - !Text "RX: ${recv}MB/S"
+          - !Text "TX: ${sent}MB/S"
+
+# - block:
+#     title: BAT
+#   constraint: !Length 15
+#   component_type: !Provider
+#     provider: battery
+#     layout:
+#       - !Text "${charge}% | ${status}"
+#       # - !VGroup
+#       #   center: false
+#       #   elements:
+#       #     - !Text "${charge}% | ${status}"
+#       #     - !Bar
+#       #       direction: !Horizontal
+#       #       var: charge
+#       - !VGroup
+#         center: true
+#         elements:
+#           - !Text "${status}"
+#           - !HGroup
+#             elements:
+#               - !Text "${charge}%"
+#               - !Bar
+#                 direction: !Horizontal
+#                 var: charge

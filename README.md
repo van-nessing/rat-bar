@@ -11,7 +11,7 @@ Currently there are 2 files (`providers.yaml` and `layout.yaml`) that need to be
 The tested way to use rat-bar is with Kitty's [`kitten panel`](https://sw.kovidgoyal.net/kitty/kittens/panel/) and the convenience script `scripts.nu`. Because of nushell quirks or my own inability I could not get all bars to close when spawning them via jobs, so for the time being use `scripts.nu spawn-sh` which constructs a bash command that launches the bar on all monitors and kills them when the parent process exits.
 
 Example config files can be found in the repository, but they **REQUIRE** nushell to be installed and hardware values like net adapter in `providers.yaml` need to match your machine.
-The nushell scripts can be replaced by anything that periodically outputs json delimited by \n:
+The example nushell scripts can be replaced by anything that periodically outputs json delimited by \n:
 
 ```json
 {"foo": 1, "bar": "my"}\n
@@ -21,31 +21,33 @@ The nushell scripts can be replaced by anything that periodically outputs json d
 {"foo": 5, "bar": "provider"}\n
 ```
 
+Additional dependencies are `nvidia-smi` for `nvidia` functionality and `playerctl` for `now-playing`, however all other providers should just work
+
 # Layout
 
 ```yaml
-component_type: !Group
-  components:
-    - block:
-        title: "title"
-      constraint: !Length 20
-      component_type: !Provider
-        etc...
-    - block:
-        title: "other title"
-      constraint: !Percentage 50
-      component_type: !NowPlaying
-        etc...
+- block:
+    title: "title"
+  constraint: !Length 20
+  component_type: !Provider
+    etc...
+- block:
+    title: "other title"
+  constraint: !Percentage 50
+  component_type: !Visualizer
+    etc...
+# blocks are optional but usually you want them
+- component_type: !Provider
 ```
 
-`layout.yaml` defines the layout of the bar. Usually you have `Group` as a top level element, which contains all your other bar components such as `Visualizer` and `NowPlaying`.
-Components have a `block` option which wraps them in a block with `title` and a `constraint` option which controls how wide the component will be. Valid options for `constraint` are `Length`, `Percentage`, `Fill`, `Min`, `Max` but `Length` and `Percentage` are by far the most useful ones.  
+`layout.yaml` defines the layout of the bar.
+Components have a `block` option which wraps them in a block with `title` and a `constraint` option which controls how wide the component will be. Valid options for `constraint` are `Length`, `Percentage`, `Fill`, `Min`, `Max` but `Length` and `Percentage` are by far the most useful ones.
+Read the example configuration in the repo to see what's possible! I left some comments to document what's happening
 
 | Component | Description |
 | --------- | ----------- |
 | `Group`   | Groups its elements together, can be used to make nested blocks |
 | `Provider`| The most powerful component. A provider is a program that gets invoked by rat-bar and sends data to rat-bar |
-| `NowPlaying` | Uses the mpris2 d-bus interface to display info about currently playing media with scrolling text |
 | `Visualizer` | Displays an spectrum audio visualizer using pipewire |
 
 ## Components
@@ -54,21 +56,39 @@ Components have a `block` option which wraps them in a block with `title` and a 
 
 The `Provider` component uses variables supplied by the specified `provider` to display text, graphs and bars. The `provider` field decides which provider in `providers.yaml` to get its variables from.
 
+#### Config
+
+`providers.yaml` maps the provider name used in `layout.yaml` to a command that will get executed when the bar starts up
+
+```yaml
+clock:
+  command:
+    - nu
+    - ~/.config/rat-bar/provider.nu
+    - clock
+    - --interval 1sec
+cpu:
+  command:
+    - nu
+    - ~/.config/rat-bar/provider.nu
+    - cpu
+    - --interval 1sec
+    - --temp_sensor 'k10temp Tccd1'
+    - --acc_count 12
+```
+
 #### Provider Layout
 
 | Element | Description |
 | ------- | ----------- |
 | `HGroup`| Displays `elements` in a row |
 | `VGroup`| Displays `elements` in a row, elements can be centered with `center: true` |
-| `Text`  | Displays text, can contain provider variables using `${var_name}` syntax
-| `Bar`   | Displays a bar in `direction` (either `Horizontal` or `Vertical`) using `var` ranging from 0-100
-| `Graph` | Displays a graph using `var` which contains a list of values ranging from 0-100
+| `Text`  | Displays text, can contain provider variables using `${var_name}` syntax and can get styled using `$style_name(foo: ${some_var} bar)` (style options are `ul` for underlining) |
+| `Bar`   | Displays a bar in `direction` (either `Horizontal` or `Vertical`) using `var` ranging from 0-100 |
+| `Graph` | Displays a graph using `var` which contains a list of values ranging from 0-100 | 
+| `Image` | Displays an image using `var` which contains the path to an image |
 
 Additionally each element type except `Text` has an optional `width` field
-
-### `NowPlaying`
-
-The `NowPlaying` component displays title, artist and album and the album cover in a music player style. Text will scroll when it does not fit in the available space.
 
 ### `Visualizer`
 

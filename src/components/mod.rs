@@ -3,19 +3,19 @@ use ratatui::{
     widgets::{Block, StatefulWidget, Widget},
 };
 use serde::Deserialize;
+use tokio::sync::mpsc::Sender;
 
 use crate::{
     app::Meta,
     components::{
         diagnostics::Diagnostics,
-        now_playing::{NowPlaying, NowPlayingState, Preference},
         provider::{ProviderLayout, ProviderLayoutType, ProviderWidget},
         visualizer::Visualizer,
     },
+    event::Request,
 };
 
 pub mod diagnostics;
-pub mod now_playing;
 pub mod provider;
 pub mod visualizer;
 
@@ -42,12 +42,6 @@ pub enum BarComponentType {
         spacing: Spacing,
         components: Vec<BarComponent>,
     },
-    NowPlaying {
-        preference: Preference,
-        #[serde(default)]
-        #[serde(skip)]
-        state: NowPlayingState,
-    },
     Provider {
         provider: String,
         layout: Vec<ProviderLayoutType>,
@@ -58,17 +52,27 @@ pub enum BarComponentType {
 
 pub struct BarComponentWidget<'a> {
     inner: &'a mut BarComponent,
-    meta: &'a Meta,
+    requests: &'a mut Sender<Request>,
+    meta: &'a mut Meta,
 }
 
 impl BarComponent {
     pub fn constraint(&self) -> Constraint {
         self.constraint
     }
-    pub fn as_widget<'a>(&'a mut self, meta: &'a Meta) -> BarComponentWidget<'a> {
-        BarComponentWidget { inner: self, meta }
+    pub fn as_widget<'a>(
+        &'a mut self,
+        meta: &'a mut Meta,
+        requests: &'a mut Sender<Request>,
+    ) -> BarComponentWidget<'a> {
+        BarComponentWidget {
+            inner: self,
+            meta,
+            requests,
+        }
     }
 }
+
 impl ConfigBlock {
     pub fn to_block<'a>(&'a self) -> Block<'a> {
         Block::bordered().title(self.title.as_str())
@@ -80,7 +84,6 @@ impl<'a> Widget for &mut BarComponentWidget<'a> {
     where
         Self: Sized,
     {
-        let meta = self.meta;
         if let Some(block) = self.inner.block.as_ref().map(ConfigBlock::to_block) {
             (&block).render(area, buf);
             area = block.inner(area);
@@ -92,10 +95,6 @@ impl<'a> Widget for &mut BarComponentWidget<'a> {
                 spacing,
             } => {
                 let spacing = spacing.clone();
-                // if let Some(block) = block.as_ref().map(ConfigBlock::to_block) {
-                //     (&block).render(area, buf);
-                //     area = block.inner(area);
-                // }
                 let layout = Layout::horizontal(components.iter().map(BarComponent::constraint))
                     .flex(*flex)
                     .horizontal_margin(1)
@@ -103,14 +102,18 @@ impl<'a> Widget for &mut BarComponentWidget<'a> {
                 let rects = area.layout_vec(&layout);
 
                 for (component, area) in components.iter_mut().zip(rects) {
-                    component.as_widget(self.meta).render(area, buf);
+                    component
+                        .as_widget(self.meta, self.requests)
+                        .render(area, buf);
                 }
             }
             BarComponentType::Provider { provider, layout } => {
                 if let Some(meta) = self.meta.provider.providers.get(provider) {
                     ProviderWidget {
                         meta,
+                        images: &mut self.meta.provider.images,
                         layout: layout.as_mut_slice(),
+                        requests: self.requests,
                     }
                     .render(
                         area.inner(Margin {
@@ -120,13 +123,6 @@ impl<'a> Widget for &mut BarComponentWidget<'a> {
                         buf,
                     );
                 }
-            }
-            BarComponentType::NowPlaying { preference, state } => {
-                NowPlaying {
-                    meta: &self.meta.now_playing,
-                    preference,
-                }
-                .render(area, buf, state);
             }
             BarComponentType::Diagnosticts {} => {
                 Diagnostics {

@@ -1,11 +1,11 @@
 #!/usr/bin/env nu
 
-# Get cpu information
+# Get cpu information from /proc/stat
 #     variables: [load freq temp acc]
 def "main cpu" [
-    interval: duration # Interval at which messages get sent
-    temp_sensor: string # Name of cpu temperature sensor
-    acc_count: int # Number of datapoints for accumulated data
+    --interval (-i): duration # Interval at which messages get sent
+    --temp_sensor (-s): string # Name of cpu temperature sensor
+    --acc_count (-c): int # Number of datapoints for accumulated data
 ]: [] {
     let stat = {
         open /proc/stat
@@ -38,11 +38,68 @@ def "main cpu" [
         sleep ($interval - $delta)
     }
 }
-# Get gpu information
+
+# Get current playing song using `playerctl`
+#     variables: [player status artist album title art position length progress buttons]
+def "main now-playing" [
+    --interval (-i): duration # Interval at which messages get sent
+    --at_least (-l): string # State to at least be in to be selected (one of [playing paused stopped])
+    --players (-p): list<string> # List of players to query
+]: [] {    
+    let states = [playing paused stopped];
+    let state = $states | zip 0.. | into record
+    let button =  $states | zip ['||' '❙❯' '██'] | into record
+    let player_order = $players | zip 0.. | into record
+
+    def get_state [s] { $state | get $s }
+
+    loop {
+        let time = date now;
+        
+        let player = { |player|
+            playerctl metadata -p $player -f '{"player":"{{playerName}}","status":"{{lc(status)}}","artist":"{{artist}}","album":"{{album}}","title":"{{title}}","art":"{{mpris:artUrl}}","position":{{position}},"length":{{mpris:length}}}'
+            | from json
+        }
+        let players = $players
+            | each { try { do $player $in }}
+            | default { player: "", status: "paused", artist: "", album: "", title: "", art: "", position: null, length: null, progress: 0.0, }
+
+        let out = $players
+            | where { |p| (get_state $p.status) <=  (get_state $at_least) }
+            | first
+            | default ($players | first)
+            | update art { str replace 'file://' '' }
+            | update cells -c [position, length] { into duration -u us }
+            | insert progress { try { 100 * $in.position / $in.length } catch { 0 } | append 0 | math max | append 100 | math min }
+            | update cells -c [position, length] {
+                try {
+                    let t = $in | into record
+                    if $t.sign == - { error make }
+                    let hours = try { $"($t.hour)" } catch { null }
+                    let minutes = try { $"($t.minute)" } catch { "0" }
+                    let seconds = try { $"($t.second | fill -c 0 -w 2 -a right)" } catch { "00" }
+
+                    [$hours $minutes $seconds] | compact | str join :
+                } catch { "xx:xx" }
+            }
+            # } into record | $"( try { $in.minute } catch { $in.minute }):($in.second | fill -c 0 -w 2 -a right)" }
+            | insert buttons { 
+                let status = $in.status
+                let button = $button | get $status
+                $"⏵⏵ ($button) ⏴⏴"
+            }
+
+        $out | to json -r | print
+        let delta = (date now) - $time
+        sleep ($interval - $delta)
+    }
+}
+
+# Get gpu information using nvidia-smi
 #     variables = []
 def "main nvidia" [
-    interval: duration # Interval at which messages get sent
-    acc_count: int # Number of datapoints for accumulated data
+    --interval (-i): duration # Interval at which messages get sent
+    --acc_count (-c): int # Number of datapoints for accumulated data
 ]: [] {
     let memory_q = [used free total] | each { "memory." ++ $in }
     let util_q  = ["utilization.gpu"] 
@@ -79,7 +136,7 @@ def "main nvidia" [
 # Get mem information
 #     variables [total free used available, ...]
 def "main mem" [
-    interval: duration # Interval at which messages get sent
+    --interval (-i): duration # Interval at which messages get sent
 ]: [] {
     loop {
         sys mem
@@ -102,8 +159,8 @@ def "main mem" [
 # Get net information
 #     variables [sent recv]
 def "main net" [
-    interval: duration # Interval at which messages get sent
-    device: string # Net device to use
+    --interval (-i): duration # Interval at which messages get sent
+    --device (-a): string # Net device to use
 ]: [] {
     let net = { sys net | where name == $device | reject name ip mac | into record }
     mut prev = do $net
@@ -125,11 +182,11 @@ def "main net" [
     }
 }
 
-# Get battery information
+# Get battery information using /sys/class/power_supply
 #     variables: [charge]
 def "main battery" [
-    interval: duration # Interval at which messages get sent
-    device: string # Battery device to use
+    --interval (-i): duration # Interval at which messages get sent
+    --device (-d): string # Battery device to use
 ]: [] {
      let charge = {
         let full: int = open $"/sys/class/power_supply/($device)/charge_full" | into int
@@ -153,7 +210,7 @@ def "main battery" [
 # Get time information
 #     variables: [day time data ...]
 def "main clock" [
-    interval: duration # Interval at which messages get sent
+    --interval (-i): duration # Interval at which messages get sent
 ]: [] {
     loop {
         let now = date now;

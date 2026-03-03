@@ -12,7 +12,5 @@ pub struct Config {
 #[serde_as]
 #[derive(Deserialize)]
 pub struct Provider {
-    #[serde_as(as = "Option<DurationSecondsWithFrac<f64>>")]
-    pub update: Option<Duration>,
     pub command: Vec<String>,
 }

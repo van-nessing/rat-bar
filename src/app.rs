@@ -13,23 +13,21 @@ use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
 };
 use ratatui_image::picker::Picker;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
     components::{
         diagnostics::DiagnosticsMeta,
-        now_playing::{NowPlayingMeta, PlayerInfo, SongMetadata},
-        provider::{Provider, ProviderMeta},
+        provider::{AccessBuf, Provider, ProviderMeta},
         visualizer::VisualizerMeta,
     },
-    event::Event,
+    event::{Event, Request},
     ui::Ui,
 };
 
 // #[derive(Debug)]
 pub struct Meta {
     pub provider: ProviderMeta,
-    pub now_playing: NowPlayingMeta,
     pub visualizer: VisualizerMeta,
     pub diagnostics: DiagnosticsMeta,
 }
@@ -45,6 +43,7 @@ pub struct App {
     pub picker: Picker,
     pub running: Arc<AtomicBool>,
     pub events: Receiver<Event>,
+    pub requests: Sender<Request>,
 }
 impl<T: Default + Clone> Record<T> {
     pub fn new(max_points: usize) -> Self {
@@ -69,9 +68,7 @@ impl Default for Meta {
         Self {
             provider: ProviderMeta {
                 providers: HashMap::new(),
-            },
-            now_playing: NowPlayingMeta {
-                players: Default::default(),
+                images: HashMap::new(),
             },
             visualizer: VisualizerMeta::new(16, 256),
             diagnostics: DiagnosticsMeta::default(),
@@ -84,6 +81,7 @@ impl App {
     pub async fn new(
         running: Arc<AtomicBool>,
         events: Receiver<Event>,
+        requests: Sender<Request>,
         ui: Ui,
     ) -> color_eyre::Result<Self> {
         Ok(Self {
@@ -92,18 +90,34 @@ impl App {
             ui,
             events,
             running,
+            requests,
         })
     }
 
     /// Run the application's main loop.
     pub async fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
-        let refresh_rate = Duration::from_secs(1) / 30;
+        let refresh_rate = Duration::from_secs(1) / 60;
         let mut last_render = Instant::now() - refresh_rate;
 
         while self.running.load(Ordering::Relaxed) {
             let render_now = Instant::now();
+            // limit refresh rate
             if render_now.duration_since(last_render) > refresh_rate {
+                // reset image access
+                self.meta
+                    .provider
+                    .images
+                    .values_mut()
+                    .for_each(|access| access.reset());
+
                 terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
+
+                // remove all image protocls from cache that weren't rendered this frame
+                self.meta
+                    .provider
+                    .images
+                    .retain(|_, access| access.accessed());
+
                 last_render = render_now;
                 self.meta.diagnostics.render_time = render_now.elapsed();
             }
@@ -130,24 +144,6 @@ impl App {
                         }
                         _ => {}
                     }
-                }
-
-                Event::UpdatePlayers { players } => {
-                    for (id, player) in players.into_iter() {
-                        let map = self
-                            .meta
-                            .now_playing
-                            .players
-                            .entry(id)
-                            .or_insert(PlayerInfo {
-                                name: player.name,
-                                metadata: SongMetadata::default(),
-                                state: player.state,
-                            });
-                        map.metadata.update(&self.picker, player.metadata).await?;
-                        map.state = player.state;
-                    }
-                    self.meta.diagnostics.event_times.player = event_now.elapsed();
                 }
                 Event::SendAudioSample {
                     mut frequencies,
@@ -183,6 +179,12 @@ impl App {
                         .update(variables);
                     // self.meta.provider
                     // self.meta.provider.providers.insert(name, provider);
+                }
+                Event::ImageLoaded { path, protocol } => {
+                    self.meta
+                        .provider
+                        .images
+                        .insert(path, AccessBuf::new(Some(protocol)));
                 }
             }
             self.meta.diagnostics.event_time = event_now.elapsed();

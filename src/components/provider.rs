@@ -1,27 +1,27 @@
-use std::{borrow::Cow, collections::HashMap, process::Stdio, time::Duration};
+use std::{borrow::Cow, cell::Cell, collections::HashMap, process::Stdio, rc::Rc, time::Duration};
 
 use color_eyre::eyre::Context;
 use futures_concurrency::future::Race;
 use lazy_static::lazy_static;
 use ratatui::{
-    layout::{Constraint, Direction, Flex, Layout},
+    layout::{Constraint, Direction, Flex, Layout, Size},
     style::Style,
-    text::Line,
-    widgets::StatefulWidget,
-    widgets::Widget,
+    text::{Line, Span},
+    widgets::{StatefulWidget, Widget},
 };
+use ratatui_image::protocol::Protocol;
 use regex::Captures;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_with::{FromInto, serde_as};
-use tokio::sync::mpsc::Sender;
+use tokio::{io::AsyncReadExt, sync::mpsc::Sender};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::Child,
 };
 
 use crate::{
-    event::Event,
+    event::{Event, Request},
     widgets::{
         graph::GraphWidget,
         percentage_bar::BlockPercentageBar,
@@ -29,9 +29,39 @@ use crate::{
     },
 };
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub struct ProviderMeta {
     pub providers: HashMap<String, Provider>,
+    pub images: HashMap<String, AccessBuf<Option<Protocol>>>,
+}
+impl std::fmt::Debug for ProviderMeta {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
+pub struct AccessBuf<T> {
+    val: T,
+    accessed: bool,
+}
+
+impl<T> AccessBuf<T> {
+    pub fn new(val: T) -> Self {
+        Self {
+            val,
+            accessed: true,
+        }
+    }
+    pub fn get(&mut self) -> &T {
+        self.accessed = true;
+        &self.val
+    }
+    pub fn reset(&mut self) {
+        self.accessed = false;
+    }
+    pub fn accessed(&self) -> bool {
+        self.accessed
+    }
 }
 
 #[derive(Debug)]
@@ -45,13 +75,14 @@ pub struct Variable {
 }
 
 pub struct ProviderProcess {
-    pub update: Option<Duration>,
     pub process: Child,
 }
 
 pub struct ProviderLayout<'a> {
     pub variables: &'a HashMap<String, Variable>,
+    pub images: &'a mut HashMap<String, AccessBuf<Option<Protocol>>>,
     pub layout: &'a mut ProviderLayoutType,
+    pub requests: &'a mut Sender<Request>,
 }
 
 fn default_true() -> bool {
@@ -74,14 +105,16 @@ pub enum ProviderLayoutType {
     },
     VGroup {
         #[serde(default)]
-        width: Constraint,
-        #[serde(default = "default_true")]
-        inherit: bool,
+        width: Option<Constraint>,
         #[serde(default = "default_true")]
         center: bool,
         elements: Vec<ProviderLayoutType>,
     },
     Text(#[serde_as(as = "FromInto<String>")] Text),
+    Image {
+        width: u16,
+        var: String,
+    },
     Bar {
         #[serde(default)]
         width: Constraint,
@@ -112,7 +145,9 @@ impl From<String> for Text {
 
 pub struct ProviderWidget<'a> {
     pub meta: &'a Provider,
+    pub images: &'a mut HashMap<String, AccessBuf<Option<Protocol>>>,
     pub layout: &'a mut [ProviderLayoutType],
+    pub requests: &'a mut Sender<Request>,
 }
 
 impl Provider {
@@ -134,11 +169,12 @@ impl ProviderLayoutType {
             } => *width,
             ProviderLayoutType::VGroup {
                 width,
-                inherit,
                 center,
                 elements,
             } => {
-                if *inherit {
+                if let Some(width) = width {
+                    *width
+                } else {
                     elements
                         .iter()
                         .map(|e| e.width(variables))
@@ -150,14 +186,16 @@ impl ProviderLayoutType {
                             }
                         })
                         .map(Constraint::Length)
-                        .unwrap_or(*width)
-                } else {
-                    *width
+                        .unwrap_or(Constraint::Fill(1))
                 }
             }
             ProviderLayoutType::Text(text) => {
-                Constraint::Length(interpolate(&text.string, variables).chars().count() as u16)
+                let string = interpolate(&text.string, variables);
+                let line = format_string(string.as_ref());
+
+                Constraint::Length(line.width() as u16)
             }
+            ProviderLayoutType::Image { width, var } => Constraint::Length(*width),
             ProviderLayoutType::Bar {
                 width,
                 direction,
@@ -175,11 +213,11 @@ impl ProviderLayoutType {
             } => Constraint::Fill(1),
             ProviderLayoutType::VGroup {
                 width,
-                inherit,
                 center,
                 elements,
             } => Constraint::Fill(1),
             ProviderLayoutType::Text(..) => Constraint::Length(1),
+            ProviderLayoutType::Image { width, var } => Constraint::Fill(1),
             ProviderLayoutType::Bar {
                 width,
                 direction,
@@ -210,14 +248,15 @@ impl Widget for ProviderLayout<'_> {
                 for (area, element) in layout.into_iter().zip(elements.iter_mut()) {
                     ProviderLayout {
                         variables: self.variables,
+                        images: self.images,
                         layout: element,
+                        requests: self.requests,
                     }
                     .render(area, buf);
                 }
             }
             ProviderLayoutType::VGroup {
                 width,
-                inherit,
                 center,
                 elements,
             } => {
@@ -229,17 +268,34 @@ impl Widget for ProviderLayout<'_> {
                     }
                     ProviderLayout {
                         variables: self.variables,
+                        images: self.images,
                         layout: element,
+                        requests: self.requests,
                     }
                     .render(area, buf);
                 }
             }
             ProviderLayoutType::Text(text) => {
                 let string = interpolate(&text.string, self.variables);
-                ScrollText {
-                    line: Line::raw(string),
+                let line = format_string(string.as_ref());
+                ScrollText { line }.render(area, buf, &mut text.state);
+            }
+            ProviderLayoutType::Image { width, var } => {
+                if let Some(path) = self.variables.get(var) {
+                    let path = path.value.as_str().unwrap();
+                    // image is present
+                    if let Some(access) = self.images.get_mut(path) {
+                        // image finished loading
+                        if let Some(protocol) = access.get() {
+                            ratatui_image::Image::new(protocol).render(area, buf);
+                        }
+                    } else {
+                        self.requests.try_send(Request::LoadImage {
+                            path: path.to_string(),
+                            size: Size::new(5, area.height),
+                        });
+                    }
                 }
-                .render(area, buf, &mut text.state);
             }
             ProviderLayoutType::Bar {
                 width,
@@ -295,18 +351,21 @@ impl Widget for ProviderWidget<'_> {
         };
         ProviderLayout {
             variables: &self.meta.variables,
+            images: self.images,
             layout,
+            requests: self.requests,
         }
         .render(area, buf);
     }
 }
 
 lazy_static! {
-    static ref REGEX: regex::Regex = regex::Regex::new(r"\$\{([^${}]*)\}").unwrap();
+    static ref VARIABLES: regex::Regex = regex::Regex::new(r"\$\{([^${}]*)\}").unwrap();
+    static ref FORMAT: regex::Regex = regex::Regex::new(r"\$(\w{2})\(([^)]*)\)").unwrap();
 }
 
 pub fn interpolate<'a>(string: &'a str, variables: &'_ HashMap<String, Variable>) -> Cow<'a, str> {
-    REGEX.replace_all(string, |captures: &Captures| {
+    VARIABLES.replace_all(string, |captures: &Captures| {
         let name = captures.get(1).unwrap();
         variables
             .get(name.as_str())
@@ -319,6 +378,37 @@ pub fn interpolate<'a>(string: &'a str, variables: &'_ HashMap<String, Variable>
             })
             .unwrap_or(Cow::Borrowed("UNDEFINED"))
     })
+}
+
+pub fn get_style(str: &str) -> Style {
+    let style = Style::default();
+    match str {
+        "ul" => style.underlined(),
+        _ => style,
+    }
+}
+
+pub fn format_string<'a>(string: &'a str) -> Line<'a> {
+    let mut start = 0;
+    let mut line = Line::default();
+    for captures in FORMAT.captures_iter(string) {
+        let match_start = captures.get_match().start();
+        let style = captures.get(1).unwrap();
+        let text = captures.get(2).unwrap();
+        let span = Span::from(text.as_str()).style(get_style(style.as_str()));
+
+        if match_start > start {
+            line.push_span(&string[start..match_start]);
+        }
+        line.push_span(span);
+
+        start = captures.get_match().end()
+    }
+    if start < string.len() {
+        line.push_span(&string[start..string.len()]);
+    }
+
+    line
 }
 
 pub async fn provider_events(
@@ -341,15 +431,7 @@ pub async fn provider_events(
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
                 .spawn()
-                .map(|child| {
-                    (
-                        name.clone(),
-                        ProviderProcess {
-                            update: config.update,
-                            process: child,
-                        },
-                    )
-                })
+                .map(|child| (name.clone(), ProviderProcess { process: child }))
                 .map_err(color_eyre::Report::from)
                 .map_err(|e| e.wrap_err(format!("provider: {name}")))
         })
@@ -366,46 +448,42 @@ pub async fn provider_events(
                 let mut reader = BufReader::new(&mut stdout);
 
                 let result = (async || {
-                    if let Some(tick_duration) = provider.update {
-                        let mut timer = tokio::time::interval(tick_duration);
-                        timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                    loop {
+                        buf.clear();
+                        reader.read_line(&mut buf).await?;
 
-                        loop {
-                            stdin.write_all(b"\n").await?;
-                            stdin.flush().await?;
-
-                            buf.clear();
-                            reader.read_line(&mut buf).await?;
-
-                            let variables = serde_json::from_str(&buf)?;
-
-                            sender
-                                .send(Event::UpdateProvider {
-                                    name: name.clone(),
-                                    variables,
-                                })
-                                .await?;
-                            timer.tick().await;
-                        }
-                    } else {
-                        loop {
-                            buf.clear();
-                            reader.read_line(&mut buf).await?;
-
-                            let variables = serde_json::from_str(&buf)
-                                .wrap_err_with(|| format!("{name} input: {buf}"))?;
-
-                            sender
-                                .send(Event::UpdateProvider {
-                                    name: name.clone(),
-                                    variables,
-                                })
-                                .await?;
-                        }
+                        let variables = match serde_json::from_str(&buf) {
+                            Ok(var) => var,
+                            Err(e) => {
+                                let mut err = Vec::new();
+                                let another = tokio::time::timeout(
+                                    Duration::from_secs(1),
+                                    reader.read_to_end(&mut err),
+                                )
+                                .await
+                                .ok()
+                                .and_then(|ok| ok.err());
+                                let err = color_eyre::Result::<()>::Err(e.into())
+                                    .wrap_err(format!("on provider {name}"))
+                                    .wrap_err(String::from_utf8_lossy(&err).to_string())
+                                    .wrap_err(buf);
+                                if let Some(another) = another {
+                                    return err.wrap_err(another);
+                                } else {
+                                    return err;
+                                }
+                            }
+                        };
+                        sender
+                            .send(Event::UpdateProvider {
+                                name: name.clone(),
+                                variables,
+                            })
+                            .await?;
                     }
                 })()
                 .await;
-                provider.process.kill().await?;
+                provider.process.kill().await;
                 result
             }
         })
