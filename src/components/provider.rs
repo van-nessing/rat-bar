@@ -429,7 +429,7 @@ pub async fn provider_events(
                 .kill_on_drop(true)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
-                .stderr(Stdio::null())
+                .stderr(Stdio::piped())
                 .spawn()
                 .map(|child| (name.clone(), ProviderProcess { process: child }))
                 .map_err(color_eyre::Report::from)
@@ -445,6 +445,7 @@ pub async fn provider_events(
                 let mut buf = String::new();
                 let mut stdin = provider.process.stdin.as_mut().unwrap();
                 let mut stdout = provider.process.stdout.as_mut().unwrap();
+                let mut stderr = provider.process.stderr.as_mut().unwrap();
                 let mut reader = BufReader::new(&mut stdout);
 
                 let result = (async || {
@@ -458,15 +459,15 @@ pub async fn provider_events(
                                 let mut err = Vec::new();
                                 let another = tokio::time::timeout(
                                     Duration::from_secs(1),
-                                    reader.read_to_end(&mut err),
+                                    stderr.read_to_end(&mut err),
                                 )
                                 .await
                                 .ok()
                                 .and_then(|ok| ok.err());
                                 let err = color_eyre::Result::<()>::Err(e.into())
-                                    .wrap_err(format!("on provider {name}"))
-                                    .wrap_err(String::from_utf8_lossy(&err).to_string())
-                                    .wrap_err(buf);
+                                    .wrap_err(format!("on provider: {name}"))
+                                    .wrap_err(format!("output: {buf}"))
+                                    .wrap_err(String::from_utf8_lossy(&err).to_string());
                                 if let Some(another) = another {
                                     return err.wrap_err(another);
                                 } else {
