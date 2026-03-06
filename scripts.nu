@@ -3,7 +3,6 @@
 def "main spawn all" [
     lines: int = 4,
     --bin(-b): string = "rat-bar",
-    --log_file(-l): path = "/tmp/rat-bar/log.txt"
 ] {
     let screens = main get screens
 
@@ -17,6 +16,8 @@ def "main spawn all" [
     };
 
     let kill_jobs = { job list | get id | each { job kill $in }}
+
+    let log_file = mktemp -t rat-bar.XXX --suffix txt
 
     "rat-bar spawned" | print
 

@@ -13,4 +13,4 @@ writers.writeNuBin "rat-bar-providers" {
       playerctl
     ]}"
   ];
-} (path + /providers.nu)
+} (path + /example-config/providers.nu)

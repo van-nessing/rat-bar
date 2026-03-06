@@ -20,7 +20,7 @@ cpu:
   - cpu
   - 1sec
   # replace this with your systems temp sensor (nu -c sys temp)
-  - ''
+  - "''"
   - '12'
 mem:
   command:

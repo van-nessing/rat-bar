@@ -33,7 +33,7 @@ Additional dependencies are `nvidia-smi` for `nvidia` functionality and `playerc
 
 This repo includes a flake, if you want to try it out simply copy `providers.yaml` `layout.yaml` and `providers.nu` into `~/.config/rat-bar/` and make sure you have nu installed!
 
-`nix shell nixpkgs#nushell github:van-nessing/rat-bar -c rat-bar-scripts spawn all`
+`nix shell 'nixpkgs#nushell' 'github:van-nessing/rat-bar#rat-bar-scripts' -c rat-bar-scripts spawn all`
 
 ### Using with Home Manager
 

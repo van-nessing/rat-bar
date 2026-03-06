@@ -62,7 +62,7 @@ def "main now-playing" [
         }
         let players = $players
             | each { try { do $player $in }}
-            | append { player: "", status: "stopped", artist: "", album: "", title: "", art: "", position: null, length: null, progress: 0.0, }
+            | append { player: "", status: "stopped", artist: "", album: "", title: "", art: "", position: null, length: null }
 
         let out = $players
             | where { |p| (get_state $p.status) <=  (get_state $at_least) }
