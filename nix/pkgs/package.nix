@@ -3,16 +3,17 @@
   rustPlatform,
   pkg-config,
   pipewire,
+  path ? ./.,
 }:
 let
-  config = lib.importTOML ./Cargo.toml;
+  config = lib.importTOML (path + /Cargo.toml);
 in
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = config.package.name;
   version = config.package.version;
-  cargoLock.lockFile = ./Cargo.lock;
+  cargoLock.lockFile = path + /Cargo.lock;
   doCheck = false;
-  src = ./.;
+  src = path;
 
   nativeBuildInputs = [
     pkg-config

@@ -13,7 +13,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use crate::{
     app::App,
     components::{BarComponent, visualizer::visualizer_events},
-    config::Provider,
+    config::{Config, Provider},
     event::EventTask,
     ui::Ui,
     widgets::bar_graph::BarGraph,
@@ -35,12 +35,24 @@ async fn main() -> color_eyre::Result<()> {
     let (request_sender, request_receiver) = tokio::sync::mpsc::channel(32);
 
     let running = Arc::new(AtomicBool::new(true));
+
     let dir = dirs::config_local_dir()
         .ok_or_else(|| eyre!("couldn't find config directory"))?
         .join("rat-bar");
 
-    let file = tokio::fs::read(dir.join("layout.yaml")).await?;
-    let components: Vec<BarComponent> = serde_yaml::from_slice(&file)?;
+    let config = Config {
+        layout: {
+            let slice = tokio::fs::read(dir.join("layout.yaml")).await?;
+            let deserializer = serde_yaml::Deserializer::from_slice(&slice);
+            serde_yaml::with::singleton_map_recursive::deserialize(deserializer)?
+        },
+        providers: {
+            let slice = tokio::fs::read(dir.join("providers.yaml")).await?;
+            let deserializer = serde_yaml::Deserializer::from_slice(&slice);
+            serde_yaml::with::singleton_map_recursive::deserialize(deserializer)?
+        },
+    };
+
     let ui = Ui {
         component: BarComponent {
             constraint: ratatui::layout::Constraint::Fill(1),
@@ -48,15 +60,18 @@ async fn main() -> color_eyre::Result<()> {
             component_type: components::BarComponentType::Group {
                 flex: ratatui::layout::Flex::SpaceAround,
                 spacing: 0.into(),
-                components,
+                components: config.layout,
             },
         },
     };
-    let file = tokio::fs::read(dir.join("providers.yaml")).await?;
-    let providers = serde_yaml::from_slice(&file)?;
 
     let app = App::new(running.clone(), event_receiver, request_sender, ui).await?;
-    let dispatcher = EventTask::new(running.clone(), event_sender, request_receiver, providers)?;
+    let dispatcher = EventTask::new(
+        running.clone(),
+        event_sender,
+        request_receiver,
+        config.providers,
+    )?;
 
     let terminal = ratatui::init();
 

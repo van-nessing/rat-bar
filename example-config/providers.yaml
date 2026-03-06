@@ -1,0 +1,38 @@
+# Providers used by example layout
+# Can be replaced by any program that outputs json lines
+# 
+# More providers are available in `providers.nu`, you just need to enable them!
+# 
+# run `providers.nu` to see a list of providers
+# run `providers.nu provider-name --help` to see what arguments it needs
+# 
+# If you don't want to install nushell just rewrite the example providers in bash (and maybe make a pr)
+clock:
+  command:
+  - nu
+  - ~/.config/rat-bar/providers.nu
+  - clock
+  - 1sec
+cpu:
+  command:
+  - nu
+  - ~/.config/rat-bar/providers.nu
+  - cpu
+  - 1sec
+  # replace this with your systems temp sensor (nu -c sys temp)
+  - ''
+  - '12'
+mem:
+  command:
+  - nu
+  - ~/.config/rat-bar/providers.nu
+  - mem
+  - 1sec
+now-playing:
+  command:
+  - nu
+  - ~/.config/rat-bar/providers.nu
+  - now-playing
+  - 1sec
+  - paused
+  - '[chromium,firefox]'

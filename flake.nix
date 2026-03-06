@@ -10,6 +10,7 @@
       ...
     }:
     let
+      path = ./.;
       inherit (nixpkgs) lib;
       systems = lib.systems.flakeExposed;
       eachSystem =
@@ -20,6 +21,7 @@
         default = pkgs.rat-bar;
         rat-bar = pkgs.rat-bar;
         rat-bar-scripts = pkgs.rat-bar-scripts;
+        rat-bar-providers = pkgs.rat-bar-providers;
       });
       devShells = eachSystem (pkgs: {
         default = pkgs.mkShell {
@@ -32,9 +34,13 @@
           ];
         };
       });
+      homeModules = {
+        default = import ./nix/modules/rat-bar.nix;
+      };
       overlays.default = final: prev: {
-        rat-bar = final.callPackage ./package.nix { };
-        rat-bar-scripts = final.writers.writeNuBin "rat-bar-scripts" (builtins.readFile ./scripts.nu);
+        rat-bar = final.callPackage ./nix/pkgs/package.nix { inherit path; };
+        rat-bar-scripts = final.callPackage ./nix/pkgs/scripts.nix { inherit path; };
+        rat-bar-providers = final.callPackage ./nix/pkgs/providers.nix { inherit path; };
       };
     };
 }

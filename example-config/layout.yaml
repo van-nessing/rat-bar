@@ -1,0 +1,149 @@
+- block:
+    title: VISUALIZER
+  component_type:
+    Visualizer: {}
+- block:
+    title: CLOCK
+  # Sets the width of the widget: https://docs.rs/ratatui/0.30.0/ratatui/prelude/enum.Constraint.html
+  constraint:
+    Length: 30
+  component_type:
+    Provider:
+      # Name of the provider defined in `providers.yaml`
+      provider: clock
+      # Each element in the list corresponds to a height
+      # If the bar is larger the last element will get picked
+      layout:
+        # 1
+      - HGroup:
+          elements:
+          # Use ${var_name} to get a variable from the provider
+          # Use $ul(text ${variable}) to underline text and variables 
+          - Text: ${day}
+          - Text: ${time}
+          - Text: ${date}
+        # 2
+      - HGroup:
+          elements:
+          - VGroup:
+              elements:
+              - Text: DAY
+              - Text: ${day}
+          - VGroup:
+              elements:
+              - Text: TIME
+              - Text: ${time}
+          - VGroup:
+              elements:
+              - Text: DATE
+              - Text: ${date}
+
+- block:
+    title: NOW PLAYING
+  constraint:
+    Length: 70
+  component_type:
+    Provider:
+      provider: now-playing
+      layout:
+      - HGroup:
+          elements:
+          - Image:
+              var: art
+              width: 2
+          - HGroup:
+              elements:
+              - Text: $ul(${title}) | $ul(${artist})
+              width:
+                Percentage: 70
+          - Text: ${buttons}
+          - HGroup:
+              elements:
+              - Bar:
+                  direction: Horizontal
+                  var: progress
+              width:
+                Percentage: 30
+          - Text: ${position}/${length}
+      - HGroup:
+          elements:
+          - Image:
+              var: art
+              width: 5
+          - VGroup:
+              elements:
+              - Text: ${title}
+              - Text: $ul(${album}) | $ul(${artist})
+              width:
+                Percentage: 60
+          - VGroup:
+              elements:
+              - HGroup:
+                  elements:
+                  - Text: ${buttons}
+                  - Text: ${position}/${length}
+              - Bar:
+                  direction: Horizontal
+                  var: progress
+              width:
+                Percentage: 40
+
+- block:
+    title: CPU
+  constraint:
+    Length: 35
+  component_type:
+    Provider:
+      provider: cpu
+      layout:
+      - HGroup:
+          elements:
+          - Text: 'LOAD: ${load}%'
+          - Text: 'FREQ: ${freq}GHZ'
+          - Bar:
+              direction: Horizontal
+              var: load
+      - HGroup:
+          elements:
+          - VGroup:
+              elements:
+              - Text: LOAD
+              - Text: ${load}%
+          - VGroup:
+              elements:
+              - Text: FREQ
+              - Text: ${freq}GHZ
+          - Graph:
+              var: acc
+
+- block:
+    title: MEM
+  constraint:
+    Length: 27
+  component_type:
+    Provider:
+      provider: mem
+      layout:
+      - HGroup:
+          elements:
+          - Text: ${used}GB/${total}GB
+          - Bar:
+              direction: Horizontal
+              var: percent
+      - HGroup:
+          elements:
+          - VGroup:
+              elements:
+              - Text: FREE
+              - Text: ${available}GB
+          - VGroup:
+              elements:
+              - Text: USED
+              - Text: ${used}GB
+          - VGroup:
+              elements:
+              - Text: TOTAL
+              - Text: ${total}GB
+          - Bar:
+              direction: Vertical
+              var: percent
