@@ -261,6 +261,8 @@ in
           config.xdg.configFile."rat-bar/layout.yaml".source
           config.xdg.configFile."rat-bar/providers.yaml".source
         ];
+        StartLimitBurst = 3;
+        StartLimitIntervalSec = 10;
       };
       Install = {
         WantedBy = [ "default.target" ];
@@ -268,7 +270,8 @@ in
       Service = {
         Type = "simple";
         ExecStart = "${lib.getExe pkgs.rat-bar-scripts} spawn all ${lib.toString cfg.service.height}";
-        Restart = "never";
+        Restart = "on-failure";
+        RestartSec = 1;
       };
     };
   };
