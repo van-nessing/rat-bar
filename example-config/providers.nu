@@ -57,7 +57,7 @@ def "main now-playing" [
         let time = date now;
         
         let player = { |player|
-            playerctl metadata -p $player -f '{"player":"{{playerName}}","status":"{{lc(status)}}","artist":"{{artist}}","album":"{{album}}","title":"{{title}}","art":"{{mpris:artUrl}}","position":{{position}},"length":{{mpris:length}}}'
+            playerctl metadata -s -p $player -f '{"player":"{{playerName}}","status":"{{lc(status)}}","artist":"{{artist}}","album":"{{album}}","title":"{{title}}","art":"{{mpris:artUrl}}","position":{{position}},"length":{{mpris:length}}}'
             | from json
         }
         let players = $players
@@ -232,18 +232,21 @@ def "main clock" [
 # Get niri event stream
 #     variables: [title app_id id pid workspace_id ...]
 def "main niri-focus" []: [] {
-    niri msg --json focused-window | print;
+    let active_window = {
+        niri msg --json focused-window
+        | from json
+        | default { title: "", app_id: "", id: "", pid: "", workspace_id: "" }
+        | to json -r
+        | print -r
+    }
+    do $active_window
 
     niri msg --json event-stream
     | lines
     | each { from json | $in.WindowFocusChanged? }
     | compact
     | each {
-        niri msg --json focused-window
-        | from json
-        | default { title: "", app_id: "", id: "", pid: "", workspace_id: "" }
-        | to json -r
-        | print -r ;
+        do $active_window
     }
 }
 
