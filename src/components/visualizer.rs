@@ -1,8 +1,8 @@
 use std::{
     iter,
     sync::{
-        Arc,
         atomic::{AtomicBool, Ordering},
+        Arc,
     },
     time::{Duration, Instant},
 };
@@ -23,7 +23,10 @@ use pipewire::{
     },
 };
 use pipewire::{context::ContextBox, properties::properties};
-use ratatui::widgets::{Paragraph, Widget};
+use ratatui::{
+    style::Color,
+    widgets::{Paragraph, Widget},
+};
 use rustfft::num_complex::Complex32;
 use tokio::sync::mpsc::Sender;
 
@@ -324,6 +327,7 @@ impl Widget for &Visualizer<'_> {
         GraphWidget {
             percentages: summed.as_slice(),
             datapoint_count: summed.len(),
+            color: Color::White,
         }
         .render(area, buf);
     }

@@ -18,7 +18,7 @@
       - HGroup:
           elements:
           # Use ${var_name} to get a variable from the provider
-          # Use $ul(text ${variable}) to underline text and variables 
+          # Use $[ul](text ${variable}) to underline text and variables 
           - Text: ${day}
           - Text: ${time}
           - Text: ${date}
@@ -53,7 +53,7 @@
               width: 2
           - HGroup:
               elements:
-              - Text: $ul(${title}) | $ul(${artist})
+              - Text: $[ul](${title}) | $[ul](${artist})
               width:
                 Percentage: 70
           - Text: ${buttons}
@@ -62,6 +62,8 @@
               - Bar:
                   direction: Horizontal
                   var: progress
+                  fg: Red
+                  bg: DarkGray
               width:
                 Percentage: 30
           - Text: ${position}/${length}
@@ -73,7 +75,7 @@
           - VGroup:
               elements:
               - Text: ${title}
-              - Text: $ul(${album}) | $ul(${artist})
+              - Text: $[ul](${album}) | $[ul](${artist})
               width:
                 Percentage: 60
           - VGroup:
@@ -85,6 +87,8 @@
               - Bar:
                   direction: Horizontal
                   var: progress
+                  fg: Red
+                  bg: DarkGray
               width:
                 Percentage: 40
 
@@ -103,6 +107,8 @@
           - Bar:
               direction: Horizontal
               var: load
+              fg: Blue
+              bg: DarkGray
       - HGroup:
           elements:
           - VGroup:
@@ -115,6 +121,7 @@
               - Text: ${freq}GHZ
           - Graph:
               var: acc
+              fg: Blue
 
 - block:
     title: MEM
@@ -130,6 +137,8 @@
           - Bar:
               direction: Horizontal
               var: percent
+              fg: Yellow
+              bg: DarkGray
       - HGroup:
           elements:
           - VGroup:
@@ -147,3 +156,5 @@
           - Bar:
               direction: Vertical
               var: percent
+              fg: Yellow
+              bg: DarkGray

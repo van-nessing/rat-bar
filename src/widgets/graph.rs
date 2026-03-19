@@ -1,12 +1,14 @@
 use itertools::Itertools;
+use ratatui::style::Color;
 use ratatui::widgets::{
-    Widget,
     canvas::{Canvas, Line},
+    Widget,
 };
 
 pub struct GraphWidget<'a> {
     pub percentages: &'a [f32],
     pub datapoint_count: usize,
+    pub color: Color,
 }
 
 impl<'a> Widget for GraphWidget<'a> {
@@ -31,7 +33,7 @@ impl<'a> Widget for GraphWidget<'a> {
                         y1: start.1,
                         x2: end.0,
                         y2: end.1,
-                        color: ratatui::style::Color::White,
+                        color: self.color,
                     });
                 }
             });

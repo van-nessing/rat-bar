@@ -2,10 +2,11 @@ use std::{borrow::Cow, cell::Cell, collections::HashMap, process::Stdio, rc::Rc,
 
 use color_eyre::eyre::Context;
 use futures_concurrency::future::Race;
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use ratatui::{
     layout::{Constraint, Direction, Flex, Layout, Size},
-    style::Style,
+    style::{Color, Style},
     text::{Line, Span},
     widgets::{StatefulWidget, Widget},
 };
@@ -120,11 +121,14 @@ pub enum ProviderLayoutType {
         width: Constraint,
         direction: Direction,
         var: String,
+        fg: String,
+        bg: String,
     },
     Graph {
         #[serde(default)]
         width: Constraint,
         var: String,
+        fg: String,
     },
 }
 
@@ -162,15 +166,9 @@ impl Provider {
 impl ProviderLayoutType {
     pub fn width(&self, variables: &HashMap<String, Variable>) -> Constraint {
         match self {
-            ProviderLayoutType::HGroup {
-                width,
-                flex,
-                elements,
-            } => *width,
+            ProviderLayoutType::HGroup { width, .. } => *width,
             ProviderLayoutType::VGroup {
-                width,
-                center,
-                elements,
+                width, elements, ..
             } => {
                 if let Some(width) = width {
                     *width
@@ -195,38 +193,22 @@ impl ProviderLayoutType {
 
                 Constraint::Length(line.width() as u16)
             }
-            ProviderLayoutType::Image { width, var } => Constraint::Length(*width),
-            ProviderLayoutType::Bar {
-                width,
-                direction,
-                var,
-            } => *width,
-            ProviderLayoutType::Graph { width, var } => *width,
+            ProviderLayoutType::Image { width, .. } => Constraint::Length(*width),
+            ProviderLayoutType::Bar { width, .. } => *width,
+            ProviderLayoutType::Graph { width, .. } => *width,
         }
     }
     pub fn height(&self) -> Constraint {
         match self {
-            ProviderLayoutType::HGroup {
-                width,
-                flex,
-                elements,
-            } => Constraint::Fill(1),
-            ProviderLayoutType::VGroup {
-                width,
-                center,
-                elements,
-            } => Constraint::Fill(1),
+            ProviderLayoutType::HGroup { .. } => Constraint::Fill(1),
+            ProviderLayoutType::VGroup { .. } => Constraint::Fill(1),
             ProviderLayoutType::Text(..) => Constraint::Length(1),
-            ProviderLayoutType::Image { width, var } => Constraint::Fill(1),
-            ProviderLayoutType::Bar {
-                width,
-                direction,
-                var,
-            } => match direction {
+            ProviderLayoutType::Image { .. } => Constraint::Fill(1),
+            ProviderLayoutType::Bar { direction, .. } => match direction {
                 Direction::Horizontal => Constraint::Length(1),
                 Direction::Vertical => Constraint::Fill(1),
             },
-            ProviderLayoutType::Graph { width, var } => Constraint::Fill(1),
+            ProviderLayoutType::Graph { .. } => Constraint::Fill(1),
         }
     }
 }
@@ -237,11 +219,7 @@ impl Widget for ProviderLayout<'_> {
         Self: Sized,
     {
         match &mut self.layout {
-            ProviderLayoutType::HGroup {
-                width,
-                flex,
-                elements,
-            } => {
+            ProviderLayoutType::HGroup { flex, elements, .. } => {
                 let constraints = elements.iter().map(|element| element.width(self.variables));
                 let layout =
                     area.layout_vec(&Layout::horizontal(constraints).spacing(1).flex(*flex));
@@ -256,9 +234,7 @@ impl Widget for ProviderLayout<'_> {
                 }
             }
             ProviderLayoutType::VGroup {
-                width,
-                center,
-                elements,
+                center, elements, ..
             } => {
                 let constraints = elements.iter().map(ProviderLayoutType::height);
                 let layout = area.layout_vec(&Layout::vertical(constraints));
@@ -280,7 +256,7 @@ impl Widget for ProviderLayout<'_> {
                 let line = format_string(string.as_ref());
                 ScrollText { line }.render(area, buf, &mut text.state);
             }
-            ProviderLayoutType::Image { width, var } => {
+            ProviderLayoutType::Image { var, .. } => {
                 if let Some(path) = self.variables.get(var) {
                     let path = path.value.as_str().unwrap();
                     // image is present
@@ -290,7 +266,7 @@ impl Widget for ProviderLayout<'_> {
                             ratatui_image::Image::new(protocol).render(area, buf);
                         }
                     } else {
-                        self.requests.try_send(Request::LoadImage {
+                        let _ = self.requests.try_send(Request::LoadImage {
                             path: path.to_string(),
                             size: Size::new(5, area.height),
                         });
@@ -298,21 +274,31 @@ impl Widget for ProviderLayout<'_> {
                 }
             }
             ProviderLayoutType::Bar {
-                width,
                 direction,
                 var,
+                fg,
+                bg,
+                ..
             } => {
                 if let Some(percentage) = self.variables.get(var).and_then(|var| var.value.as_f64())
                 {
+                    let fg = interpolate(fg, self.variables);
+                    let bg = interpolate(bg, self.variables);
+
+                    let fg = get_color(&fg).unwrap_or(Color::DarkGray);
+                    let bg = get_color(&bg).unwrap_or(Color::DarkGray);
+
+                    let style = Style::new().fg(fg).bg(bg);
+
                     BlockPercentageBar {
-                        style: Style::new().on_dark_gray(),
+                        style,
                         percentage: percentage as f32,
                         direction: *direction,
                     }
                     .render(area, buf);
                 }
             }
-            ProviderLayoutType::Graph { width, var } => {
+            ProviderLayoutType::Graph { var, fg, .. } => {
                 if let Some(data) = self
                     .variables
                     .get(var)
@@ -323,9 +309,13 @@ impl Widget for ProviderLayout<'_> {
                             .collect::<Option<Vec<_>>>()
                     })
                 {
+                    let fg = interpolate(fg, self.variables);
+                    let color = get_color(&fg).unwrap_or(Color::White);
+
                     GraphWidget {
                         percentages: data.as_slice(),
                         datapoint_count: data.len(),
+                        color,
                     }
                     .render(area, buf);
                 }
@@ -360,13 +350,17 @@ impl Widget for ProviderWidget<'_> {
 }
 
 lazy_static! {
-    static ref VARIABLES: regex::Regex = regex::Regex::new(r"\$\{([^${}]*)\}").unwrap();
-    static ref FORMAT: regex::Regex = regex::Regex::new(r"\$(\w{2})\(([^)]*)\)").unwrap();
+    static ref VARIABLES: regex::Regex = regex::Regex::new(r"\$\{(?<var>[^${}]*)\}").unwrap();
+    // static ref FORMAT: regex::Regex =
+    //     regex::Regex::new(r"\$(\w{2})\[([^$\[\]]*)\]\(([^)]*)\)").unwrap();
+    static ref FORMAT: regex::Regex =
+        regex::Regex::new(r"\$\[(?<args>[^\[\]]*)\]\((?<text>[^()]*)\)").unwrap();
 }
+// $[args](text)
 
 pub fn interpolate<'a>(string: &'a str, variables: &'_ HashMap<String, Variable>) -> Cow<'a, str> {
     VARIABLES.replace_all(string, |captures: &Captures| {
-        let name = captures.get(1).unwrap();
+        let name = captures.name("var").unwrap();
         variables
             .get(name.as_str())
             .map(|var| {
@@ -379,13 +373,49 @@ pub fn interpolate<'a>(string: &'a str, variables: &'_ HashMap<String, Variable>
             .unwrap_or(Cow::Borrowed("UNDEFINED"))
     })
 }
+pub fn get_color(str: &str) -> Option<Color> {
+    Some(match str {
+        "Black" => Color::Black,
+        "Red" => Color::Red,
+        "Green" => Color::Green,
+        "Yellow" => Color::Yellow,
+        "Blue" => Color::Blue,
+        "Magenta" => Color::Magenta,
+        "Cyan" => Color::Cyan,
+        "Gray" => Color::Gray,
+        "DarkGray" => Color::DarkGray,
+        "LightRed" => Color::LightRed,
+        "LightGreen" => Color::LightGreen,
+        "LightYellow" => Color::LightYellow,
+        "LightBlue" => Color::LightBlue,
+        "LightMagenta" => Color::LightMagenta,
+        "LightCyan" => Color::LightCyan,
+        "White" => Color::White,
+        str if str.starts_with('#') => Color::from_u32(u32::from_str_radix(&str[1..], 16).ok()?),
+        _ => return None,
+    })
+}
 
 pub fn get_style(str: &str) -> Style {
-    let style = Style::default();
-    match str {
-        "ul" => style.underlined(),
-        _ => style,
-    }
+    let styles = str.split(',');
+
+    styles.fold(Style::default(), |style, str| match str.split_once(':') {
+        Some((str, args)) => match str {
+            "bg" => get_color(args).map(|c| style.bg(c)).unwrap_or(style),
+            "fg" => get_color(args).map(|c| style.fg(c)).unwrap_or(style),
+            _ => style,
+        },
+        None => match str {
+            "ul" => style.underlined(),
+            "rv" => style.reversed(),
+            "it" => style.italic(),
+            "bo" => style.bold(),
+            "sb" => style.slow_blink(),
+            "rb" => style.rapid_blink(),
+            "cr" => style.crossed_out(),
+            _ => style,
+        },
+    })
 }
 
 pub fn format_string<'a>(string: &'a str) -> Line<'a> {
@@ -393,8 +423,8 @@ pub fn format_string<'a>(string: &'a str) -> Line<'a> {
     let mut line = Line::default();
     for captures in FORMAT.captures_iter(string) {
         let match_start = captures.get_match().start();
-        let style = captures.get(1).unwrap();
-        let text = captures.get(2).unwrap();
+        let style = captures.name("args").unwrap();
+        let text = captures.name("text").unwrap();
         let span = Span::from(text.as_str()).style(get_style(style.as_str()));
 
         if match_start > start {
@@ -448,43 +478,41 @@ pub async fn provider_events(
                 let mut stderr = provider.process.stderr.as_mut().unwrap();
                 let mut reader = BufReader::new(&mut stdout);
 
-                let result = (async || {
-                    loop {
-                        buf.clear();
-                        reader.read_line(&mut buf).await?;
+                let result = (async || loop {
+                    buf.clear();
+                    reader.read_line(&mut buf).await?;
 
-                        let variables = match serde_json::from_str(&buf) {
-                            Ok(var) => var,
-                            Err(e) => {
-                                let mut err = Vec::new();
-                                let another = tokio::time::timeout(
-                                    Duration::from_secs(1),
-                                    stderr.read_to_end(&mut err),
-                                )
-                                .await
-                                .ok()
-                                .and_then(|ok| ok.err());
-                                let err = color_eyre::Result::<()>::Err(e.into())
-                                    .wrap_err(format!("on provider: {name}"))
-                                    .wrap_err(format!("output: {buf}"))
-                                    .wrap_err(String::from_utf8_lossy(&err).to_string());
-                                if let Some(another) = another {
-                                    return err.wrap_err(another);
-                                } else {
-                                    return err;
-                                }
+                    let variables = match serde_json::from_str(&buf) {
+                        Ok(var) => var,
+                        Err(e) => {
+                            let mut err = Vec::new();
+                            let another = tokio::time::timeout(
+                                Duration::from_secs(1),
+                                stderr.read_to_end(&mut err),
+                            )
+                            .await
+                            .ok()
+                            .and_then(|ok| ok.err());
+                            let err = color_eyre::Result::<()>::Err(e.into())
+                                .wrap_err(format!("on provider: {name}"))
+                                .wrap_err(format!("output: {buf}"))
+                                .wrap_err(String::from_utf8_lossy(&err).to_string());
+                            if let Some(another) = another {
+                                return err.wrap_err(another);
+                            } else {
+                                return err;
                             }
-                        };
-                        sender
-                            .send(Event::UpdateProvider {
-                                name: name.clone(),
-                                variables,
-                            })
-                            .await?;
-                    }
+                        }
+                    };
+                    sender
+                        .send(Event::UpdateProvider {
+                            name: name.clone(),
+                            variables,
+                        })
+                        .await?;
                 })()
                 .await;
-                provider.process.kill().await;
+                let _ = provider.process.kill().await;
                 result
             }
         })
