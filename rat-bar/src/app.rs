@@ -19,7 +19,6 @@ use crate::{
     components::{
         diagnostics::DiagnosticsMeta,
         provider::{AccessBuf, Provider, ProviderMeta},
-        visualizer::VisualizerMeta,
     },
     event::{Event, Request},
     ui::Ui,
@@ -28,7 +27,6 @@ use crate::{
 // #[derive(Debug)]
 pub struct Meta {
     pub provider: ProviderMeta,
-    pub visualizer: VisualizerMeta,
     pub diagnostics: DiagnosticsMeta,
 }
 
@@ -70,7 +68,6 @@ impl Default for Meta {
                 providers: HashMap::new(),
                 images: HashMap::new(),
             },
-            visualizer: VisualizerMeta::new(16, 256),
             diagnostics: DiagnosticsMeta::default(),
         }
     }
@@ -144,26 +141,6 @@ impl App {
                         }
                         _ => {}
                     }
-                }
-                Event::SendAudioSample {
-                    mut frequencies,
-                    sample_rate,
-                } => {
-                    frequencies.truncate(128);
-                    self.meta.visualizer.amp_average.rotate_right(1);
-                    self.meta.visualizer.amp_average[0] =
-                        frequencies.iter().sum::<f32>() / frequencies.len() as f32;
-
-                    let scale = 0.9;
-                    self.meta.visualizer.sample_rate = sample_rate;
-                    self.meta.visualizer.data.rotate_right(1);
-                    self.meta
-                        .visualizer
-                        .data
-                        .iter_mut()
-                        .for_each(|bins| bins.iter_mut().for_each(|bin| *bin *= scale));
-                    self.meta.visualizer.data[0] = frequencies;
-                    self.meta.diagnostics.event_times.visualizer = event_now.elapsed()
                 }
                 Event::UpdateProviders { providers } => {
                     self.meta.provider = providers;

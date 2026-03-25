@@ -1,7 +1,14 @@
 - block:
     title: VISUALIZER
   component_type:
-    Visualizer: {}
+    Provider:
+      provider: visualizer
+      layout:
+          - Graph:
+              fg: Green
+              var: bins
+  constraint:
+    Length: 35
 - block:
     title: CLOCK
   # Sets the width of the widget: https://docs.rs/ratatui/0.30.0/ratatui/prelude/enum.Constraint.html

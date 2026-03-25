@@ -15,17 +15,10 @@ use tokio::{
 };
 use tokio_stream::StreamExt;
 
-use crate::components::{
-    provider::{Provider, ProviderMeta, provider_events},
-    visualizer::visualizer_events,
-};
+use crate::components::provider::{Provider, ProviderMeta, provider_events};
 
 pub enum Event {
     Crossterm(CrosstermEvent),
-    SendAudioSample {
-        frequencies: Vec<f32>,
-        sample_rate: u32,
-    },
     UpdateProviders {
         providers: ProviderMeta,
     },
@@ -73,7 +66,6 @@ impl EventTask {
         (
             crossterm_events(self.sender.clone()),
             signal_events(self.sender.clone()),
-            visualizer_events(self.sender.clone(), self.running.clone()),
             provider_events(self.sender.clone(), self.providers),
             handle_requests(self.sender.clone(), self.requests, self.picker),
         )

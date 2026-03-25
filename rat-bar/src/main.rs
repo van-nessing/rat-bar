@@ -1,23 +1,9 @@
-use std::{
-    collections::HashMap,
-    io::Stdin,
-    process::Stdio,
-    sync::{Arc, atomic::AtomicBool},
-    time::Duration,
-};
+use std::sync::{Arc, atomic::AtomicBool};
 
 use color_eyre::eyre::eyre;
 use futures_concurrency::future::Race;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
-use crate::{
-    app::App,
-    components::{BarComponent, visualizer::visualizer_events},
-    config::{Config, Provider},
-    event::EventTask,
-    ui::Ui,
-    widgets::bar_graph::BarGraph,
-};
+use crate::{app::App, components::BarComponent, config::Config, event::EventTask, ui::Ui};
 
 pub mod app;
 pub mod components;

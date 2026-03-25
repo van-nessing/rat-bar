@@ -1,4 +1,6 @@
+{ overlay }:
 {
+  self,
   lib,
   pkgs,
   config,
@@ -26,14 +28,19 @@ let
       inherit elements;
     };
   bar =
-    var: direction:
+    var: direction: fg: bg:
     type "Bar" {
-      inherit var direction;
+      inherit
+        var
+        direction
+        fg
+        bg
+        ;
     };
   graph =
-    var:
+    var: fg:
     type "Graph" {
-      inherit var;
+      inherit var fg;
     };
   image =
     var: width:
@@ -59,18 +66,16 @@ in
       description = "Amount of lines to spawn bar with. Can be resized after.";
     };
 
-    package = lib.mkOption {
-      type = lib.types.package;
-      default = pkgs.rat-bar;
-      description = "Package to use for rat-bar.";
-    };
-
     layout = lib.mkOption {
       description = "Defines the bar layout.";
       default = [
         {
           block.title = "VISUALIZER";
-          component_type = type "Visualizer" { };
+          constraint = type "Fill" 1;
+          component_type = provider {
+            provider = "visualizer";
+            layout = [ (graph "bins" "Gray") ];
+          };
         }
         {
           block.title = "CLOCK";
@@ -78,13 +83,13 @@ in
           component_type = provider {
             provider = "clock";
             layout = [
-              # 1
+              #1
               (hgroup [
                 (text "\${day}")
                 (text "\${time}")
                 (text "\${date}")
               ])
-              # 2
+              #2
               (hgroup [
                 (vgroup [
                   (text "DAY")
@@ -108,28 +113,27 @@ in
           component_type = provider {
             provider = "now-playing";
             layout = [
-              # 1
+              #1
               (hgroup [
                 (image "art" 2)
-                (
+                (width { Percentage = 70; } (
                   hgroup [
-                    (text "$ul(\${title}) | $ul(\${artist})")
+                    (text "$[ul](\${title}) | $[ul](\${artist})")
                   ]
-                  |> width { Percentage = 70; }
+                ) # |> width { Percentage = 70; }
                 )
                 (text "\${buttons}")
-                (bar "progress" "Horizontal" |> width { Percentage = 30; })
+                (width { Percentage = 30; } (bar "progress" "Horizontal" "Red" "DarkGray"))
                 (text "\${position}/\${length}")
               ])
-              # 2
+              #2
               (hgroup [
                 (image "art" 5)
-                (
-                  vgroup [
-                    (text "\${title}")
-                    (text "$ul(\${album}) | $ul(\${artist})")
-                  ]
-                  |> width { Percentage = 60; }
+                (width { Percentage = 60; } (vgroup [
+                  (text "\${title}")
+                  (text "$[ul](\${album}) | $[ul](\${artist})")
+                ])
+                  # |> width { Percentage = 60; }
                 )
                 (type "VGroup" {
                   width = (type "Percentage" 40);
@@ -138,7 +142,7 @@ in
                       (text "\${buttons}")
                       (text "\${position}/\${length}")
                     ])
-                    (bar "progress" "Horizontal")
+                    (bar "progress" "Horizontal" "Red" "DarkGray")
                   ];
                 })
               ])
@@ -151,13 +155,13 @@ in
           component_type = provider {
             provider = "cpu";
             layout = [
-              # 1
+              #1
               (hgroup [
                 (text "LOAD: \${load}%")
                 (text "FREQ: \${freq}GHZ")
-                (bar "load" "Horizontal")
+                (bar "load" "Horizontal" "Blue" "DarkGray")
               ])
-              # 2
+              #2
               (hgroup [
                 (vgroup [
                   (text "LOAD")
@@ -167,7 +171,7 @@ in
                   (text "FREQ")
                   (text "\${freq}GHZ")
                 ])
-                (graph "acc")
+                (graph "acc" "Blue")
               ])
             ];
           };
@@ -178,12 +182,12 @@ in
           component_type = provider {
             provider = "mem";
             layout = [
-              # 1
+              #1
               (hgroup [
                 (text "\${used}GB/\${total}GB")
-                (bar "percent" "Horizontal")
+                (bar "percent" "Horizontal" "Yellow" "DarkGray")
               ])
-              # 2
+              #2
               (hgroup [
                 (vgroup [
                   (text "FREE")
@@ -197,8 +201,29 @@ in
                   (text "TOTAL")
                   (text "\${total}GB")
                 ])
-                (bar "percent" "Vertical")
+                (bar "percent" "Vertical" "Yellow" "DarkGray")
               ])
+            ];
+          };
+        }
+        {
+          block.title = "NET";
+          constraint = type "Length" 16;
+          component_type = provider {
+            provider = "net";
+            layout = [
+              #1
+              (hgroup [
+                (text "RX: \${recv}")
+                (text "TX: \${sent}")
+              ])
+              #2
+              (no-center (vgroup [
+                (text "RX: \${recv}MB/S")
+                (text "TX: \${sent}MB/S")
+              ])
+                # |> no-center
+              )
             ];
           };
         }
@@ -209,32 +234,44 @@ in
       description = "Defines the providers used by rat-bar.";
       default =
         let
-          providers = pkgs.rat-bar-providers |> lib.getExe;
+          providers-rs = lib.getExe pkgs.ratbar-providers-rs;
         in
         {
           cpu.command = [
-            providers
+            providers-rs
             "cpu"
             "1sec"
-            "''"
-            "12"
+            ""
           ];
           now-playing.command = [
-            providers
-            "now-playing"
+            providers-rs
+            "media"
             "1sec"
             "paused"
-            "[chromium,firefox]"
+            "spotify"
           ];
           mem.command = [
-            providers
+            providers-rs
             "mem"
             "1sec"
           ];
           clock.command = [
-            providers
+            providers-rs
             "clock"
             "1sec"
+            "day=%a"
+            "time=%R"
+            "date=%d.%m.%Y"
+          ];
+          net.command = [
+            providers-rs
+            "net"
+            "1sec"
+          ];
+          visualizer.command = [
+            providers-rs
+            "visualizer"
+            "10ms"
           ];
         };
       type = lib.types.attrsOf (
@@ -250,7 +287,10 @@ in
     };
   };
   config = lib.mkIf cfg.enable {
-    home.packages = [ cfg.package ];
+    nixpkgs.overlays = [
+      overlay
+    ];
+
     xdg.configFile."rat-bar/layout.yaml".source = layout;
     xdg.configFile."rat-bar/providers.yaml".source = providers;
 
@@ -269,7 +309,7 @@ in
       };
       Service = {
         Type = "simple";
-        ExecStart = "${lib.getExe pkgs.rat-bar-scripts} spawn all ${lib.toString cfg.service.height}";
+        ExecStart = "${lib.getExe pkgs.ratbar-scripts-rs} spawn --lines ${lib.toString cfg.service.height}";
         Restart = "on-failure";
         RestartSec = 1;
       };

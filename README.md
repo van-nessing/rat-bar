@@ -6,12 +6,23 @@ A terminal based status bar built in rust with [ratatui](https://ratatui.rs/). I
 
 # Quickstart
 
-Currently there are 2 files (`providers.yaml` and `layout.yaml`) that need to be present in `~/.config/rat-bar` for rat-bar to start. 
-If you are using the example config you also need `providers.nu` in the same folder.
-The tested way to use rat-bar is with Kitty's [`kitten panel`](https://sw.kovidgoyal.net/kitty/kittens/panel/) and the convenience script `scripts.nu spawn all`.
+```sh
+mkdir -f ~/.config/rat-bar
+git clone https://github.com/van-nessing/rat-bar
+cd rat-bar
+cargo build --release
+cp ./target/release/ratbar-providers-rs ~/.config/rat-bar/ratbar-providers-rs
+wget https://raw.githubusercontent.com/van-nessing/rat-bar/refs/heads/main/example-config/layout.yaml -P ~/.config/rat-bar
+wget https://raw.githubusercontent.com/van-nessing/rat-bar/refs/heads/main/example-config/providers.yaml -P ~/.config/rat-bar
+./target/release/ratbar-scripts-rs spawn ./target/release/rat-bar
+```
 
-Example config files can be found in the repository, but they **REQUIRE** nushell to be installed and hardware values like net adapter in `providers.yaml` need to match your machine.
-The example nushell scripts can be replaced by anything that periodically outputs json delimited by \n:
+Currently there are 2 files (`providers.yaml` and `layout.yaml`) that need to be present in `~/.config/rat-bar` for rat-bar to start. 
+When using the example config you also need to compile the providers package and put the binary into `~/.config/rat-bar`.
+
+The tested way to use rat-bar is with Kitty's [`kitten panel`](https://sw.kovidgoyal.net/kitty/kittens/panel/) and the convenience script `ratbar-scripts-rs spawn` or `scripts.nu spawn all`.
+
+The example scripts can be replaced by anything that periodically outputs json delimited by \n:
 
 ```json
 {"foo": 1, "bar": "my"}\n
@@ -21,7 +32,8 @@ The example nushell scripts can be replaced by anything that periodically output
 {"foo": 5, "bar": "provider"}\n
 ```
 
-Additional dependencies are `nvidia-smi` for `nvidia` functionality and `playerctl` for `now-playing`, however all other providers should just work.
+Additional dependencies are `pipewire` for `visualizer`.
+Dependencies for the nushell providers are `nvidia-smi` for `nvidia` functionality `playerctl` when using `now-playing` from `scripts.nu`, however all other providers should just work.
 
 <details>
 
@@ -31,9 +43,14 @@ Additional dependencies are `nvidia-smi` for `nvidia` functionality and `playerc
 
 </summary>
 
-This repo includes a flake, if you want to try it out simply copy `providers.yaml` `layout.yaml` and `providers.nu` into `~/.config/rat-bar/` and make sure you have nu installed!
-
-`nix shell 'nixpkgs#nushell' 'github:van-nessing/rat-bar#rat-bar-scripts' -c rat-bar-scripts spawn all`
+```sh
+cd ~/.config/rat-bar
+wget https://raw.githubusercontent.com/van-nessing/rat-bar/refs/heads/main/example-config/layout.yaml
+wget https://raw.githubusercontent.com/van-nessing/rat-bar/refs/heads/main/example-config/providers.yaml
+nix build "github:van-nessing/rat-bar#ratbar-providers-rs"
+cp ./result/bin/ratbar-providers-rs ./ratbar-providers-rs
+nix run "github:van-nessing/rat-bar#ratbar-scripts-rs" -- spawn
+```
 
 ### Using with Home Manager
 
@@ -45,10 +62,7 @@ The repo also includes a home module which allows you to configure your bar decl
 # flake.nix
 {
   inputs = {
-    rat-bar = {
-      url = "github:van-nessing/rat-bar";
-      inputs.nixpkgs.follows = "nixpkgs";
-    }
+    rat-bar.url = "github:van-nessing/rat-bar";
   }
 }
 ```
@@ -57,8 +71,8 @@ The repo also includes a home module which allows you to configure your bar decl
 # home.nix
 {
   imports = [ inputs.rat-bar.homeModules.default ];
-  # Include to resize with `rat-bar-scripts resize`
-  home.packages = with pkgs; [ rat-bar-scripts ];
+  # Include to resize with `ratbar-scripts-rs resize`
+  home.packages = with pkgs; [ ratbar-scripts-rs ];
 
   # Enables auto start service with default config
   programs.rat-bar = {
@@ -84,7 +98,7 @@ You can replace the custom providers like this (just make sure to enable all the
   programs.rat-bar = {
      providers =
      let
-       providers = lib.getExe pkgs.rat-bar-providers;
+       providers = lib.getExe pkgs.ratbar-providers-rs;
      in
      {      
        cpu.command = [
@@ -92,13 +106,6 @@ You can replace the custom providers like this (just make sure to enable all the
          "cpu"
          "1sec"
          "" # Insert temperature sensor name (nu -c 'sys temp')
-         "12"
-       ];
-       nvidia.command = [
-         providers
-         "nvidia"
-         "1sec"
-         "12"
        ];
        my-provider.command = [
          /path/to/binary
@@ -224,15 +231,10 @@ Read the example configuration in the repo to see what's possible! I left some c
 | --------- | ----------- |
 | `Group`   | Groups its elements together, can be used to make nested blocks |
 | `Provider`| The most powerful component. A provider is a program that gets invoked by rat-bar and sends data to rat-bar |
-| `Visualizer` | Displays an spectrum audio visualizer using pipewire |
 
-## Components
+# Providers
 
-### `Provider`
-
-The `Provider` component uses variables supplied by the specified `provider` to display text, graphs and bars. The `provider` field decides which provider in `providers.yaml` to get its variables from.
-
-#### Config
+The `Provider` component uses variables supplied by the specified `provider` to display styled text, graphs, bars and images. The `provider` field decides which provider in `providers.yaml` to get its variables from.
 
 `providers.yaml` maps the provider name used in `layout.yaml` to a command that will get executed when the bar starts up
 
@@ -242,34 +244,11 @@ clock:
     - nu
     - ~/.config/rat-bar/provider.nu
     - clock
-    - --interval 1sec
+    - 1sec
 cpu:
   command:
-    - nu
-    - ~/.config/rat-bar/provider.nu
+    - ratbar-providers-rs
     - cpu
-    - --interval 1sec
-    - --temp_sensor 'k10temp Tccd1'
-    - --acc_count 12
+    - 1sec
+    - 'k10temp Tccd1'
 ```
-
-#### Provider Layout
-
-| Element | Description |
-| ------- | ----------- |
-| `HGroup`| Displays `elements` in a row |
-| `VGroup`| Displays `elements` in a row, elements can be centered with `center: true` |
-| `Text`  | Displays text, can contain provider variables using `${var_name}` syntax and can get styled using `$style_name(foo: ${some_var} bar)` (style options are `ul` for underlining) |
-| `Bar`   | Displays a bar in `direction` (either `Horizontal` or `Vertical`) using `var` ranging from 0-100 |
-| `Graph` | Displays a graph using `var` which contains a list of values ranging from 0-100 | 
-| `Image` | Displays an image using `var` which contains the path to an image |
-
-Additionally each element type except `Text` has an optional `width` field
-
-### `Visualizer`
-
-`Visualizer` uses pipewire to get the audio output and construct an averaged spectrum view. The channels and format are hardcoded and I have no clue if it works on machines other than mine.
-
-### `Group`
-
-`Group` is a leftover from when I started development and will probably get removed eventually.

@@ -7,32 +7,70 @@
 # run `providers.nu provider-name --help` to see what arguments it needs
 # 
 # If you don't want to install nushell just rewrite the example providers in bash (and maybe make a pr)
-clock:
-  command:
-  - nu
-  - ~/.config/rat-bar/providers.nu
-  - clock
-  - 1sec
+
+# clock:
+#   command:
+#   - nu
+#   - ~/.config/rat-bar/providers.nu
+#   - clock
+#   - 1sec
+# cpu:
+#   command:
+#   - nu
+#   - ~/.config/rat-bar/providers.nu
+#   - cpu
+#   - 1sec
+#   # replace this with your systems temp sensor (nu -c sys temp)
+#   - "''"
+#   - '12'
+# mem:
+#   command:
+#   - nu
+#   - ~/.config/rat-bar/providers.nu
+#   - mem
+#   - 1sec
+# now-playing:
+#   command:
+#   - nu
+#   - ~/.config/rat-bar/providers.nu
+#   - now-playing
+#   - 1sec
+#   - paused
+#   - '[chromium,firefox]'
+
 cpu:
   command:
-  - nu
-  - ~/.config/rat-bar/providers.nu
-  - cpu
-  - 1sec
-  # replace this with your systems temp sensor (nu -c sys temp)
+  - ~/.config/rat-bar/ratbar-providers-rs
+  - "cpu"
+  - "1sec"
   - "''"
-  - '12'
-mem:
-  command:
-  - nu
-  - ~/.config/rat-bar/providers.nu
-  - mem
-  - 1sec
 now-playing:
+  command: 
+  - ~/.config/rat-bar/ratbar-providers-rs
+  - "media"
+  - "1sec"
+  - "paused"
+  - "spotify"
+mem:
+  command: 
+  - ~/.config/rat-bar/ratbar-providers-rs
+  - "mem"
+  - "1sec"
+clock:
+  command: 
+  - ~/.config/rat-bar/ratbar-providers-rs
+  - "clock"
+  - "1sec"
+  - "day=%a"
+  - "time=%R"
+  - "date=%d.%m.%Y"
+net:
   command:
-  - nu
-  - ~/.config/rat-bar/providers.nu
-  - now-playing
-  - 1sec
-  - paused
-  - '[chromium,firefox]'
+  - ~/.config/rat-bar/ratbar-providers-rs
+  - "net"
+  - "1sec"
+visualizer:
+  command: 
+  - ~/.config/rat-bar/ratbar-providers-rs
+  - "visualizer"
+  - "10ms"

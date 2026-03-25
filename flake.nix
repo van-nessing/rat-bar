@@ -10,7 +10,7 @@
       ...
     }:
     let
-      path = ./.;
+      root = ./.;
       inherit (nixpkgs) lib;
       systems = lib.systems.flakeExposed;
       eachSystem =
@@ -19,14 +19,22 @@
     {
       packages = eachSystem (pkgs: {
         default = pkgs.rat-bar;
-        rat-bar = pkgs.rat-bar;
-        rat-bar-scripts = pkgs.rat-bar-scripts;
-        rat-bar-providers = pkgs.rat-bar-providers;
+        inherit (pkgs)
+          rat-bar
+          ratbar-scripts-rs
+          ratbar-scripts-nu
+          ratbar-providers-rs
+          ratbar-providers-nu
+          ;
       });
       devShells = eachSystem (pkgs: {
         default = pkgs.mkShell {
           name = "rat-bar";
-          inputsFrom = [ pkgs.rat-bar ];
+          inputsFrom = [
+            pkgs.rat-bar
+            pkgs.ratbar-providers-rs
+            pkgs.ratbar-scripts-rs
+          ];
           buildInputs = [
             pkgs.rust-analyzer
             pkgs.clippy
@@ -35,12 +43,17 @@
         };
       });
       homeModules = {
-        default = import ./nix/modules/rat-bar.nix;
+        default = import ./nix/modules/rat-bar.nix { overlay = self.overlays.default; };
       };
       overlays.default = final: prev: {
-        rat-bar = final.callPackage ./nix/pkgs/package.nix { inherit path; };
-        rat-bar-scripts = final.callPackage ./nix/pkgs/scripts.nix { inherit path; };
-        rat-bar-providers = final.callPackage ./nix/pkgs/providers.nix { inherit path; };
+        rat-bar = final.callPackage ./nix/pkgs/rat-bar.nix { inherit root; };
+        ratbar-scripts-rs = final.callPackage ./nix/pkgs/rs-scripts.nix { inherit root; };
+        ratbar-scripts-nu = final.callPackage ./nix/pkgs/nu-scripts.nix { inherit root; };
+        ratbar-providers-rs = final.callPackage ./nix/pkgs/rs-providers.nix { inherit root; };
+        ratbar-providers-nu = final.callPackage ./nix/pkgs/nu-providers.nix { inherit root; };
+      };
+      overlays.rat-bar = final: prev: {
+        rat-bar = final.callPackage ./nix/pkgs/rat-bar.nix { inherit root; };
       };
     };
 }

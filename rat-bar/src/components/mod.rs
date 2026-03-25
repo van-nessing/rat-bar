@@ -10,14 +10,12 @@ use crate::{
     components::{
         diagnostics::Diagnostics,
         provider::{ProviderLayout, ProviderLayoutType, ProviderWidget},
-        visualizer::Visualizer,
     },
     event::Request,
 };
 
 pub mod diagnostics;
 pub mod provider;
-pub mod visualizer;
 
 #[derive(Debug, Deserialize)]
 pub struct BarComponent {
@@ -47,7 +45,6 @@ pub enum BarComponentType {
         layout: Vec<ProviderLayoutType>,
     },
     Diagnosticts {},
-    Visualizer {},
 }
 
 pub struct BarComponentWidget<'a> {
@@ -135,12 +132,6 @@ impl<'a> Widget for &mut BarComponentWidget<'a> {
                     }),
                     buf,
                 );
-            }
-            BarComponentType::Visualizer {} => {
-                Visualizer {
-                    meta: &self.meta.visualizer,
-                }
-                .render(area, buf);
             }
         }
     }

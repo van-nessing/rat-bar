@@ -1,0 +1,14 @@
+[package]
+name = "ratbar-scripts-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.6.0", features = ["derive"] }
+color-eyre = "0.6.5"
+ctrlc = { version = "3.5.2", features = ["termination"] }
+futures-concurrency = "7.7.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+smol = "2.0.2"
+tempfile = "3.27.0"

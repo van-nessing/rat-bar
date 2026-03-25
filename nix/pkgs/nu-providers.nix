@@ -2,7 +2,7 @@
   lib,
   writers,
   playerctl,
-  path ? ./.,
+  root ? ./.,
 }:
 writers.writeNuBin "rat-bar-providers" {
   makeWrapperArgs = [
@@ -13,4 +13,4 @@ writers.writeNuBin "rat-bar-providers" {
       playerctl
     ]}"
   ];
-} (path + /example-config/providers.nu)
+} (root + /example-config/providers.nu)

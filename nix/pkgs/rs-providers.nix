@@ -3,17 +3,19 @@
   rustPlatform,
   pkg-config,
   pipewire,
-  path ? ./.,
+  root ? ./.,
 }:
 let
+  path = root + /ratbar-providers;
   config = lib.importTOML (path + /Cargo.toml);
 in
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = config.package.name;
   version = config.package.version;
-  cargoLock.lockFile = path + /Cargo.lock;
+  cargoLock.lockFile = root + /Cargo.lock;
+  cargoBuildFlags = "-p ratbar-providers-rs";
   doCheck = false;
-  src = path;
+  src = root;
 
   nativeBuildInputs = [
     pkg-config
@@ -24,7 +26,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
   ];
   runtimeInputs = [ ];
   meta = {
-    mainProgram = "rat-bar";
+    mainProgram = "ratbar-providers-rs";
     description = "";
     homepage = "https://github.com/van-nessing/rat-bar";
     license = lib.licenses.mit;

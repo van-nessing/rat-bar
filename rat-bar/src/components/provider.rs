@@ -1,6 +1,6 @@
-use std::{borrow::Cow, cell::Cell, collections::HashMap, process::Stdio, rc::Rc, time::Duration};
+use std::{borrow::Cow, collections::HashMap, path::PathBuf, process::Stdio, time::Duration};
 
-use color_eyre::eyre::Context;
+use color_eyre::{Section, SectionExt, eyre::Context};
 use futures_concurrency::future::Race;
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -17,7 +17,7 @@ use serde_json::Value;
 use serde_with::{FromInto, serde_as};
 use tokio::{io::AsyncReadExt, sync::mpsc::Sender};
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, BufReader},
     process::Child,
 };
 
@@ -30,13 +30,12 @@ use crate::{
     },
 };
 
-// #[derive(Debug)]
 pub struct ProviderMeta {
     pub providers: HashMap<String, Provider>,
     pub images: HashMap<String, AccessBuf<Option<Protocol>>>,
 }
 impl std::fmt::Debug for ProviderMeta {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
@@ -440,12 +439,21 @@ pub fn format_string<'a>(string: &'a str) -> Line<'a> {
 
     line
 }
+fn expand_home(path: &str) -> color_eyre::Result<PathBuf> {
+    if path == "~" {
+        return Ok(PathBuf::from(std::env::var("HOME")?));
+    }
+    if let Some(rest) = path.strip_prefix("~/") {
+        return Ok(PathBuf::from(std::env::var("HOME")?).join(rest));
+    }
+    Ok(PathBuf::from(path))
+}
 
 pub async fn provider_events(
     sender: Sender<Event>,
     providers: HashMap<String, crate::config::Provider>,
 ) -> color_eyre::Result<()> {
-    let mut providers = providers
+    let providers = providers
         .into_iter()
         .map(|(name, config)| {
             let (program, args) = config
@@ -453,7 +461,8 @@ pub async fn provider_events(
                 .split_first()
                 .ok_or_else(|| color_eyre::eyre::eyre!("provider program missing"))?;
 
-            let mut command = tokio::process::Command::new(program);
+            let program_path = expand_home(program)?;
+            let mut command = tokio::process::Command::new(&program_path);
             command
                 .args(args)
                 .kill_on_drop(true)
@@ -463,7 +472,14 @@ pub async fn provider_events(
                 .spawn()
                 .map(|child| (name.clone(), ProviderProcess { process: child }))
                 .map_err(color_eyre::Report::from)
-                .map_err(|e| e.wrap_err(format!("provider: {name}")))
+                .with_section(move || name.header("provider"))
+                .with_section(move || {
+                    program_path
+                        .to_string_lossy()
+                        .to_string()
+                        .header("provider")
+                })
+                .with_section(move || args.iter().join(" ").header("arguments"))
         })
         .collect::<Result<HashMap<_, _>, _>>()?;
 
@@ -473,12 +489,11 @@ pub async fn provider_events(
             let sender = sender.clone();
             async move {
                 let mut buf = String::new();
-                let mut stdin = provider.process.stdin.as_mut().unwrap();
                 let mut stdout = provider.process.stdout.as_mut().unwrap();
-                let mut stderr = provider.process.stderr.as_mut().unwrap();
+                let stderr = provider.process.stderr.as_mut().unwrap();
                 let mut reader = BufReader::new(&mut stdout);
 
-                let result = (async || loop {
+                let result = async || loop {
                     buf.clear();
                     reader.read_line(&mut buf).await?;
 
@@ -494,9 +509,10 @@ pub async fn provider_events(
                             .ok()
                             .and_then(|ok| ok.err());
                             let err = color_eyre::Result::<()>::Err(e.into())
-                                .wrap_err(format!("on provider: {name}"))
-                                .wrap_err(format!("output: {buf}"))
-                                .wrap_err(String::from_utf8_lossy(&err).to_string());
+                                .suppress_backtrace(true)
+                                .with_section(|| name.header("provider"))
+                                .with_section(|| buf.header("stdout"))
+                                .wrap_err_with(|| String::from_utf8_lossy(&err).to_string());
                             if let Some(another) = another {
                                 return err.wrap_err(another);
                             } else {
@@ -510,8 +526,8 @@ pub async fn provider_events(
                             variables,
                         })
                         .await?;
-                })()
-                .await;
+                };
+                let result = result().await;
                 let _ = provider.process.kill().await;
                 result
             }

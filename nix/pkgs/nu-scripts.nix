@@ -3,7 +3,7 @@
   writers,
   kitty,
   rat-bar,
-  path ? ./.,
+  root ? ./.,
 }:
 writers.writeNuBin "rat-bar-scripts" {
   makeWrapperArgs = [
@@ -15,4 +15,4 @@ writers.writeNuBin "rat-bar-scripts" {
       rat-bar
     ]}"
   ];
-} (path + /scripts.nu)
+} (root + /scripts.nu)
