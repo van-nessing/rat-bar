@@ -289,9 +289,9 @@ impl Provider for Media {
                         if let Some(status) = data.playback_status {
                             match status {
                                 PlaybackStatus::Playing => player.last_unpaused = Instant::now(),
-                                PlaybackStatus::Paused | PlaybackStatus::Stopped => {
-                                    player.position.0 += player.last_unpaused.elapsed()
-                                }
+                                PlaybackStatus::Stopped => player.position.0 = Duration::ZERO,
+                                // handled by seeked
+                                PlaybackStatus::Paused => (),
                             }
                             player.status = status;
                         }
