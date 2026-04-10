@@ -26,7 +26,7 @@ pub struct CpuFormat<'a> {
     load: f32,
     freq: f32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    temp: Option<f32>,
+    temp: Option<u32>,
     acc: &'a [f32],
 }
 
@@ -64,7 +64,11 @@ impl Provider for Cpu {
         let cpus = self.system.cpus();
         let freq = to_ghz(cpus.iter().map(|cpu| cpu.frequency()).sum::<u64>() / cpus.len() as u64);
         let load = trunc(self.system.global_cpu_usage());
-        let temp = self.sensor.as_ref().and_then(|c| c.temperature());
+        let temp = self
+            .sensor
+            .as_ref()
+            .and_then(|c| c.temperature())
+            .map(|t| t as u32);
 
         Ok(CpuFormat {
             freq,
