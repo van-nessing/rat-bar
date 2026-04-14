@@ -48,17 +48,22 @@ pub struct Metadata {
 
 #[derive(Deserialize, Default, Debug)]
 #[serde(from = "i64")]
-pub struct MicroDuration(pub Duration);
+pub struct MicroDuration(pub Option<Duration>);
 
 impl From<i64> for MicroDuration {
     fn from(value: i64) -> Self {
-        MicroDuration(Duration::from_micros(value as u64))
+        if value < 0 {
+            MicroDuration(None)
+        } else {
+            MicroDuration(Some(Duration::from_micros(value as u64)))
+        }
     }
 }
 
 impl From<OwnedValue> for MicroDuration {
     fn from(value: OwnedValue) -> Self {
-        MicroDuration(Duration::from_micros(convert::<i64>(value).unwrap() as u64))
+        let value = convert::<i64>(value).unwrap_or(-1);
+        value.into()
     }
 }
 

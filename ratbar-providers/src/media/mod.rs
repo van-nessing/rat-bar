@@ -289,7 +289,7 @@ impl Provider for Media {
                         if let Some(status) = data.playback_status {
                             match status {
                                 PlaybackStatus::Playing => player.last_unpaused = Instant::now(),
-                                PlaybackStatus::Stopped => player.position.0 = Duration::ZERO,
+                                PlaybackStatus::Stopped => player.position.0 = Some(Duration::ZERO),
                                 // handled by seeked
                                 PlaybackStatus::Paused => (),
                             }
@@ -333,7 +333,10 @@ impl Provider for Media {
 
         if let Some((_, player)) = player {
             let position = if player.status == PlaybackStatus::Playing {
-                player.position.0 + player.last_unpaused.elapsed()
+                player
+                    .position
+                    .0
+                    .map(|d| d + player.last_unpaused.elapsed())
             } else {
                 player.position.0
             };
@@ -342,8 +345,8 @@ impl Provider for Media {
             Ok(MediaFormat {
                 length: format_time(length),
                 position: format_time(position),
-                progress: ((100 * position.as_secs())
-                    .checked_div(length.as_secs())
+                progress: ((100 * position.unwrap_or_default().as_secs())
+                    .checked_div(length.as_ref().map(Duration::as_secs).unwrap_or(1))
                     .unwrap_or_default()) as f32,
                 title: &player.metadata.title,
                 album: &player.metadata.album,
@@ -375,17 +378,21 @@ fn get_players(conn: &zbus::Connection) -> eyre::Result<Vec<OwnedBusName>> {
     })
 }
 
-fn format_time(duration: Duration) -> String {
-    let mut duration = duration.as_secs();
-    let secs = duration % 60;
-    duration /= 60;
-    let mins = duration % 60;
-    duration /= 60;
-    let hours = duration;
+fn format_time(duration: Option<Duration>) -> String {
+    if let Some(duration) = duration {
+        let mut duration = duration.as_secs();
+        let secs = duration % 60;
+        duration /= 60;
+        let mins = duration % 60;
+        duration /= 60;
+        let hours = duration;
 
-    if hours != 0 {
-        format!("{hours}:{mins:0>2}:{secs:0>2}")
+        if hours != 0 {
+            format!("{hours}:{mins:0>2}:{secs:0>2}")
+        } else {
+            format!("{mins}:{secs:0>2}")
+        }
     } else {
-        format!("{mins}:{secs:0>2}")
+        String::from("xx:xx")
     }
 }
