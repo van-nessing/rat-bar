@@ -1,7 +1,7 @@
 use crate::{
+    battery::{Battery, BatteryArgs},
     clock::{Clock, ClockArgs},
     cpu::{Cpu, CpuArgs},
-    // gpu::{Gpu, GpuArgs},
     media::{Media, MediaArgs},
     mem::{Mem, MemArgs},
     net::{Net, NetArgs},
@@ -17,6 +17,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod battery;
 mod clock;
 mod cpu;
 // mod gpu;
@@ -32,6 +33,7 @@ fn main() -> eyre::Result<()> {
     let command = Command::parse();
 
     match command {
+        Command::Battery(args) => Battery::init(args)?.run(),
         Command::Clock(args) => Clock::init(args)?.run(),
         Command::Cpu(args) => Cpu::init(args)?.run(),
         // Command::Gpu(args) => Gpu::init(args)?.run(),
@@ -45,6 +47,7 @@ fn main() -> eyre::Result<()> {
 
 #[derive(clap::Parser)]
 pub enum Command {
+    Battery(BatteryArgs),
     Clock(ClockArgs),
     Cpu(CpuArgs),
     // Gpu(GpuArgs),
