@@ -1,5 +1,9 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::{
+    path::PathBuf,
+    sync::{Arc, atomic::AtomicBool},
+};
 
+use clap::Parser;
 use color_eyre::eyre::eyre;
 use futures_concurrency::future::Race;
 
@@ -13,9 +17,19 @@ pub mod theme;
 pub mod ui;
 pub mod widgets;
 
+#[derive(clap::Parser)]
+pub struct Args {
+    #[arg(short, long)]
+    providers: Option<PathBuf>,
+    #[arg(short, long)]
+    layout: Option<PathBuf>,
+}
+
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+
+    let args = Args::parse();
 
     let (event_sender, event_receiver) = tokio::sync::mpsc::channel(32);
     let (request_sender, request_receiver) = tokio::sync::mpsc::channel(32);
@@ -28,12 +42,20 @@ async fn main() -> color_eyre::Result<()> {
 
     let config = Config {
         layout: {
-            let slice = tokio::fs::read(dir.join("layout.yaml")).await?;
+            let slice = if let Some(path) = &args.layout {
+                tokio::fs::read(path).await?
+            } else {
+                tokio::fs::read(dir.join("layout.yaml")).await?
+            };
             let deserializer = serde_yaml::Deserializer::from_slice(&slice);
             serde_yaml::with::singleton_map_recursive::deserialize(deserializer)?
         },
         providers: {
-            let slice = tokio::fs::read(dir.join("providers.yaml")).await?;
+            let slice = if let Some(path) = &args.providers {
+                tokio::fs::read(path).await?
+            } else {
+                tokio::fs::read(dir.join("providers.yaml")).await?
+            };
             let deserializer = serde_yaml::Deserializer::from_slice(&slice);
             serde_yaml::with::singleton_map_recursive::deserialize(deserializer)?
         },
