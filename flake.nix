@@ -43,7 +43,7 @@
         };
       });
       homeModules = {
-        default = import ./nix/modules/rat-bar.nix { overlay = self.overlays.default; };
+        default = import ./nix/modules/rat-bar.nix { inherit self; };
       };
       overlays.default = final: prev: {
         rat-bar = final.callPackage ./nix/pkgs/rat-bar.nix { inherit root; };
