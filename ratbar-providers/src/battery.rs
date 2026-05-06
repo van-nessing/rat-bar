@@ -50,8 +50,8 @@ impl Provider for Battery {
         ))?;
         let status = read_to_string(format!("/sys/class/power_supply/{}/status", self.battery))?;
 
-        self.now = now.parse()?;
-        self.full = full.parse()?;
+        self.now = now.trim().parse()?;
+        self.full = full.trim().parse()?;
         self.status = status;
 
         Ok(())
