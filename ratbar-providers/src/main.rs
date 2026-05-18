@@ -7,6 +7,7 @@ use crate::{
     net::{Net, NetArgs},
     niri::{Niri, NiriArgs},
     visualizer::{Visualizer, VisualizerArgs},
+    wifi::{Wifi, WifiArgs},
 };
 use clap::Parser;
 use color_eyre as eyre;
@@ -27,6 +28,7 @@ mod net;
 mod niri;
 #[cfg(feature = "visualizer")]
 mod visualizer;
+mod wifi;
 
 fn main() -> eyre::Result<()> {
     color_eyre::install()?;
@@ -42,6 +44,7 @@ fn main() -> eyre::Result<()> {
         Command::Net(args) => Net::init(args)?.run(),
         Command::Niri(args) => Niri::init(args)?.run(),
         Command::Visualizer(args) => Visualizer::init(args)?.run(),
+        Command::Wifi(args) => Wifi::init(args)?.run(),
     }
 }
 
@@ -56,6 +59,7 @@ pub enum Command {
     Net(NetArgs),
     Niri(NiriArgs),
     Visualizer(VisualizerArgs),
+    Wifi(WifiArgs),
 }
 
 pub trait Provider
