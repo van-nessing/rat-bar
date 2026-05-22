@@ -31,9 +31,14 @@ use crate::{
 };
 
 pub struct ProviderMeta {
-    pub providers: HashMap<String, Provider>,
+    pub variables: HashMap<String, Value>,
     pub images: HashMap<String, AccessBuf<Option<Protocol>>>,
 }
+
+pub struct ProviderProcess {
+    pub process: Child,
+}
+
 impl std::fmt::Debug for ProviderMeta {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
@@ -62,27 +67,6 @@ impl<T> AccessBuf<T> {
     pub fn accessed(&self) -> bool {
         self.accessed
     }
-}
-
-#[derive(Debug)]
-pub struct Provider {
-    pub variables: HashMap<String, Variable>,
-}
-
-#[derive(Debug)]
-pub struct Variable {
-    pub value: Value,
-}
-
-pub struct ProviderProcess {
-    pub process: Child,
-}
-
-pub struct ProviderLayout<'a> {
-    pub variables: &'a HashMap<String, Variable>,
-    pub images: &'a mut HashMap<String, AccessBuf<Option<Protocol>>>,
-    pub layout: &'a mut ProviderLayoutType,
-    pub requests: &'a mut Sender<Request>,
 }
 
 fn default_true() -> bool {
@@ -147,23 +131,19 @@ impl From<String> for Text {
 }
 
 pub struct ProviderWidget<'a> {
-    pub meta: &'a Provider,
-    pub images: &'a mut HashMap<String, AccessBuf<Option<Protocol>>>,
+    pub providers: &'a mut ProviderMeta,
     pub layout: &'a mut [ProviderLayoutType],
     pub requests: &'a mut Sender<Request>,
 }
 
-impl Provider {
-    pub fn update(&mut self, other: HashMap<String, Value>) {
-        self.variables = other
-            .into_iter()
-            .map(|(var, val)| (var, Variable { value: val }))
-            .collect();
-    }
+pub struct ProviderLayoutState<'a> {
+    pub variables: &'a HashMap<String, Value>,
+    pub images: &'a mut HashMap<String, AccessBuf<Option<Protocol>>>,
+    pub requests: &'a mut Sender<Request>,
 }
 
 impl ProviderLayoutType {
-    pub fn width(&self, variables: &HashMap<String, Variable>) -> Constraint {
+    pub fn width(&self, variables: &HashMap<String, Value>) -> Constraint {
         match self {
             ProviderLayoutType::HGroup { width, .. } => *width,
             ProviderLayoutType::VGroup {
@@ -212,24 +192,25 @@ impl ProviderLayoutType {
     }
 }
 
-impl Widget for ProviderLayout<'_> {
-    fn render(mut self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
+impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
+    type State = ProviderLayoutState<'a>;
+    fn render(
+        self,
+        area: ratatui::prelude::Rect,
+        buf: &mut ratatui::prelude::Buffer,
+        state: &mut Self::State,
+    ) where
         Self: Sized,
     {
-        match &mut self.layout {
+        match self {
             ProviderLayoutType::HGroup { flex, elements, .. } => {
-                let constraints = elements.iter().map(|element| element.width(self.variables));
+                let constraints = elements
+                    .iter()
+                    .map(|element| element.width(state.variables));
                 let layout =
                     area.layout_vec(&Layout::horizontal(constraints).spacing(1).flex(*flex));
                 for (area, element) in layout.into_iter().zip(elements.iter_mut()) {
-                    ProviderLayout {
-                        variables: self.variables,
-                        images: self.images,
-                        layout: element,
-                        requests: self.requests,
-                    }
-                    .render(area, buf);
+                    element.render(area, buf, state);
                 }
             }
             ProviderLayoutType::VGroup {
@@ -239,33 +220,27 @@ impl Widget for ProviderLayout<'_> {
                 let layout = area.layout_vec(&Layout::vertical(constraints));
                 for (mut area, element) in layout.into_iter().zip(elements.iter_mut()) {
                     if *center {
-                        area = area.centered_horizontally(element.width(self.variables));
+                        area = area.centered_horizontally(element.width(state.variables));
                     }
-                    ProviderLayout {
-                        variables: self.variables,
-                        images: self.images,
-                        layout: element,
-                        requests: self.requests,
-                    }
-                    .render(area, buf);
+                    element.render(area, buf, state);
                 }
             }
             ProviderLayoutType::Text(text) => {
-                let string = interpolate(&text.string, self.variables);
+                let string = interpolate(&text.string, state.variables);
                 let line = format_string(string.as_ref());
                 ScrollText { line }.render(area, buf, &mut text.state);
             }
             ProviderLayoutType::Image { var, .. } => {
-                if let Some(path) = self.variables.get(var) {
-                    let path = path.value.as_str().unwrap();
+                if let Some(path) = state.variables.get(var) {
+                    let path = path.as_str().unwrap();
                     // image is present
-                    if let Some(access) = self.images.get_mut(path) {
+                    if let Some(access) = state.images.get_mut(path) {
                         // image finished loading
                         if let Some(protocol) = access.get() {
                             ratatui_image::Image::new(protocol).render(area, buf);
                         }
                     } else {
-                        let _ = self.requests.try_send(Request::LoadImage {
+                        let _ = state.requests.try_send(Request::LoadImage {
                             path: path.to_string(),
                             size: Size::new(5, area.height),
                         });
@@ -279,10 +254,9 @@ impl Widget for ProviderLayout<'_> {
                 bg,
                 ..
             } => {
-                if let Some(percentage) = self.variables.get(var).and_then(|var| var.value.as_f64())
-                {
-                    let fg = interpolate(fg, self.variables);
-                    let bg = interpolate(bg, self.variables);
+                if let Some(percentage) = state.variables.get(var).and_then(|var| var.as_f64()) {
+                    let fg = interpolate(fg, state.variables);
+                    let bg = interpolate(bg, state.variables);
 
                     let fg = get_color(&fg).unwrap_or(Color::DarkGray);
                     let bg = get_color(&bg).unwrap_or(Color::DarkGray);
@@ -298,17 +272,17 @@ impl Widget for ProviderLayout<'_> {
                 }
             }
             ProviderLayoutType::Graph { var, fg, .. } => {
-                if let Some(data) = self
+                if let Some(data) = state
                     .variables
                     .get(var)
-                    .and_then(|var| var.value.as_array())
+                    .and_then(|var| var.as_array())
                     .and_then(|val| {
                         val.iter()
                             .map(|val| val.as_f64().map(|val| val as f32))
                             .collect::<Option<Vec<_>>>()
                     })
                 {
-                    let fg = interpolate(fg, self.variables);
+                    let fg = interpolate(fg, &state.variables);
                     let color = get_color(&fg).unwrap_or(Color::White);
 
                     GraphWidget {
@@ -324,7 +298,7 @@ impl Widget for ProviderLayout<'_> {
 }
 
 impl Widget for ProviderWidget<'_> {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
+    fn render(mut self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
     {
@@ -338,13 +312,23 @@ impl Widget for ProviderWidget<'_> {
         } else {
             self.layout.last_mut().unwrap()
         };
-        ProviderLayout {
-            variables: &self.meta.variables,
-            images: self.images,
-            layout,
-            requests: self.requests,
-        }
-        .render(area, buf);
+        layout.render(
+            area,
+            buf,
+            &mut ProviderLayoutState {
+                variables: &self.providers.variables,
+                images: &mut self.providers.images,
+                requests: &mut self.requests,
+            },
+        );
+
+        // ProviderLayout {
+        //     variables: &self.meta,
+        //     images: self.images,
+        //     layout,
+        //     requests: self.requests,
+        // }
+        // .render(area, buf);
     }
 }
 
@@ -357,17 +341,17 @@ lazy_static! {
 }
 // $[args](text)
 
-pub fn interpolate<'a>(string: &'a str, variables: &'_ HashMap<String, Variable>) -> Cow<'a, str> {
+pub fn interpolate<'a>(string: &'a str, providers: &'_ HashMap<String, Value>) -> Cow<'a, str> {
     VARIABLES.replace_all(string, |captures: &Captures| {
-        let name = captures.name("var").unwrap();
-        variables
-            .get(name.as_str())
-            .map(|var| {
-                if let Value::String(string) = &var.value {
+        let var = captures.name("var").unwrap();
+        providers
+            .get(var.as_str())
+            .and_then(|var| {
+                Some(if let Value::String(string) = &var {
                     Cow::Borrowed(string.as_str())
                 } else {
-                    Cow::Owned(var.value.to_string())
-                }
+                    Cow::Owned(var.to_string())
+                })
             })
             .unwrap_or(Cow::Borrowed("UNDEFINED"))
     })

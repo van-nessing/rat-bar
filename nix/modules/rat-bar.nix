@@ -59,6 +59,9 @@ in
       description = "Enable systemd service to automatically start bars on all screens.";
     };
 
+    package = lib.mkPackageOption pkgs "rat-bar" { };
+    scripts-package = lib.mkPackageOption pkgs "ratbar-scripts-rs" { };
+
     service.height = lib.mkOption {
       type = lib.types.int;
       default = 4;
@@ -233,7 +236,7 @@ in
       description = "Defines the providers used by rat-bar.";
       default =
         let
-          providers-rs = lib.getExe self.packages.${pkgs.stdenv.system}.ratbar-providers-rs;
+          providers-rs = lib.getExe pkgs.ratbar-providers-rs;
         in
         {
           cpu.command = [
@@ -286,6 +289,7 @@ in
     };
   };
   config = lib.mkIf cfg.enable {
+    home.packages = [ cfg.package ];
     xdg.configFile."rat-bar/layout.yaml".source = layout;
     xdg.configFile."rat-bar/providers.yaml".source = providers;
 
@@ -304,9 +308,7 @@ in
       };
       Service = {
         Type = "simple";
-        ExecStart = "${
-          lib.getExe self.packages.${pkgs.stdenv.system}.ratbar-scripts-rs
-        } spawn --lines ${lib.toString cfg.service.height}";
+        ExecStart = "${lib.getExe pkgs.ratbar-scripts-rs} spawn --lines ${lib.toString cfg.service.height}";
         Restart = "on-failure";
         RestartSec = 1;
       };

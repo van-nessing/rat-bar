@@ -9,7 +9,7 @@ use crate::{
     app::Meta,
     components::{
         diagnostics::Diagnostics,
-        provider::{ProviderLayout, ProviderLayoutType, ProviderWidget},
+        provider::{ProviderLayoutType, ProviderWidget},
     },
     event::Request,
 };
@@ -41,7 +41,6 @@ pub enum BarComponentType {
         components: Vec<BarComponent>,
     },
     Provider {
-        provider: String,
         layout: Vec<ProviderLayoutType>,
     },
     Diagnosticts {},
@@ -104,22 +103,19 @@ impl<'a> Widget for &mut BarComponentWidget<'a> {
                         .render(area, buf);
                 }
             }
-            BarComponentType::Provider { provider, layout } => {
-                if let Some(meta) = self.meta.provider.providers.get(provider) {
-                    ProviderWidget {
-                        meta,
-                        images: &mut self.meta.provider.images,
-                        layout: layout.as_mut_slice(),
-                        requests: self.requests,
-                    }
-                    .render(
-                        area.inner(Margin {
-                            horizontal: 1,
-                            vertical: 0,
-                        }),
-                        buf,
-                    );
+            BarComponentType::Provider { layout } => {
+                ProviderWidget {
+                    providers: &mut self.meta.provider,
+                    layout: layout.as_mut_slice(),
+                    requests: self.requests,
                 }
+                .render(
+                    area.inner(Margin {
+                        horizontal: 1,
+                        vertical: 0,
+                    }),
+                    buf,
+                );
             }
             BarComponentType::Diagnosticts {} => {
                 Diagnostics {

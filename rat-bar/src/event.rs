@@ -15,7 +15,7 @@ use tokio::{
 };
 use tokio_stream::StreamExt;
 
-use crate::components::provider::{Provider, ProviderMeta, provider_events};
+use crate::components::provider::{ProviderMeta, provider_events};
 
 pub enum Event {
     Crossterm(CrosstermEvent),

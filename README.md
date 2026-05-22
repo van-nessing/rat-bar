@@ -7,13 +7,15 @@ A terminal based status bar built in rust with [ratatui](https://ratatui.rs/). I
 # Quickstart
 
 ```sh
-mkdir -f ~/.config/rat-bar
 git clone https://github.com/van-nessing/rat-bar
 cd rat-bar
 cargo build --release
+
+mkdir -f ~/.config/rat-bar
+cp example-config/layout.yaml ~/.config/rat-bar/layout.yaml
+cp example-config/providers.yaml ~/.config/rat-bar/providers.yaml
 cp ./target/release/ratbar-providers-rs ~/.config/rat-bar/ratbar-providers-rs
-wget https://raw.githubusercontent.com/van-nessing/rat-bar/refs/heads/main/example-config/layout.yaml -P ~/.config/rat-bar
-wget https://raw.githubusercontent.com/van-nessing/rat-bar/refs/heads/main/example-config/providers.yaml -P ~/.config/rat-bar
+
 ./target/release/ratbar-scripts-rs spawn ./target/release/rat-bar
 ```
 
@@ -48,6 +50,7 @@ cd ~/.config/rat-bar
 wget https://raw.githubusercontent.com/van-nessing/rat-bar/refs/heads/main/example-config/layout.yaml
 wget https://raw.githubusercontent.com/van-nessing/rat-bar/refs/heads/main/example-config/providers.yaml
 nix build "github:van-nessing/rat-bar#ratbar-providers-rs"
+# probably not a good idea, collect-garbage might delete?
 cp ./result/bin/ratbar-providers-rs ./ratbar-providers-rs
 nix run "github:van-nessing/rat-bar#ratbar-scripts-rs" -- spawn
 ```
@@ -70,7 +73,11 @@ The repo also includes a home module which allows you to configure your bar decl
 ```nix
 # home.nix
 {
+  nixpkgs.overlays = [
+    inputs.rat-bar.overlays.default
+  ];
   imports = [ inputs.rat-bar.homeModules.default ];
+
   # Include to resize with `ratbar-scripts-rs resize`
   home.packages = with pkgs; [ ratbar-scripts-rs ];
 
@@ -166,21 +173,21 @@ You can replace the custom providers like this (just make sure to enable all the
             (hgroup [
               (vgroup [
                 (text "LOAD")
-                (text "\${utilization.gpu}%")
+                (text "\${gpu.utilization.gpu}%")
               ])
               (vgroup [
                 (text "USED")
-                (text "\${memory.used}GB")
+                (text "\${gpu.memory.used}GB")
               ])
               (vgroup [
                 (text "USED")
-                (text "\${memory.free}GB")
+                (text "\${gpu.memory.free}GB")
               ])
               # Force width of 2 characters
               (width { Lenght = 2; } (bar "percent" "Vertical"))
               # If you have the pipe-operators feature enabled:
               # (bar "percent" "Vertical" |> width { Length = 2; })
-              (graph "acc")
+              (graph "gpu.acc")
             ])
           ];
         };
@@ -203,19 +210,17 @@ You can replace the custom providers like this (just make sure to enable all the
     Length: 35
   component_type:
     Provider:
-      # Name of provider in providers.yaml
-      provider: "my-provider"
       # Depending on the height of space available the matching element will get selected
       # Useful if you want a taller bar that shows more info on your main screen
       # Resize using `rat-bar-scripts resize`
       layout:
       # Height 1
-      - Text: "${my_var} and ${other_var}"
+      - Text: "${my-provider.my_var} and ${my-provider.other_var}"
       # Height 2
       - VGroup:
           elements:
-          - Text: "${my_var}"
-          - Text: "${other_var}"
+          - Text: "${my-provider.my_var}"
+          - Text: "${my-provider.other_var}"
     # etc...
 # blocks are optional but usually you want them
 - component_type: !Provider

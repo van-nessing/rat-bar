@@ -18,7 +18,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use crate::{
     components::{
         diagnostics::DiagnosticsMeta,
-        provider::{AccessBuf, Provider, ProviderMeta},
+        provider::{AccessBuf, ProviderMeta},
     },
     event::{Event, Request},
     ui::Ui,
@@ -43,6 +43,7 @@ pub struct App {
     pub events: Receiver<Event>,
     pub requests: Sender<Request>,
 }
+
 impl<T: Default + Clone> Record<T> {
     pub fn new(max_points: usize) -> Self {
         Self {
@@ -65,7 +66,7 @@ impl Default for Meta {
     fn default() -> Self {
         Self {
             provider: ProviderMeta {
-                providers: HashMap::new(),
+                variables: HashMap::new(),
                 images: HashMap::new(),
             },
             diagnostics: DiagnosticsMeta::default(),
@@ -146,14 +147,19 @@ impl App {
                     self.meta.provider = providers;
                 }
                 Event::UpdateProvider { name, variables } => {
-                    self.meta
-                        .provider
-                        .providers
-                        .entry(name)
-                        .or_insert(Provider {
-                            variables: Default::default(),
-                        })
-                        .update(variables);
+                    self.meta.provider.variables.extend(
+                        variables
+                            .into_iter()
+                            .map(|(k, v)| (format!("{name}.{k}"), v)),
+                    );
+                    // self.meta
+                    //     .provider
+                    //     .providers
+                    //     .entry(name)
+                    //     .or_insert(Provider {
+                    //         variables: Default::default(),
+                    //     })
+                    //     .update(variables);
                     // self.meta.provider
                     // self.meta.provider.providers.insert(name, provider);
                 }
