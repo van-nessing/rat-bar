@@ -318,40 +318,29 @@ impl Widget for ProviderWidget<'_> {
             &mut ProviderLayoutState {
                 variables: &self.providers.variables,
                 images: &mut self.providers.images,
-                requests: &mut self.requests,
+                requests: self.requests,
             },
         );
-
-        // ProviderLayout {
-        //     variables: &self.meta,
-        //     images: self.images,
-        //     layout,
-        //     requests: self.requests,
-        // }
-        // .render(area, buf);
     }
 }
 
 lazy_static! {
     static ref VARIABLES: regex::Regex = regex::Regex::new(r"\$\{(?<var>[^${}]*)\}").unwrap();
-    // static ref FORMAT: regex::Regex =
-    //     regex::Regex::new(r"\$(\w{2})\[([^$\[\]]*)\]\(([^)]*)\)").unwrap();
     static ref FORMAT: regex::Regex =
-        regex::Regex::new(r"\$\[(?<args>[^\[\]]*)\]\((?<text>[^()]*)\)").unwrap();
+        regex::Regex::new(r"\$\[(?<args>[^\[\]]*)\]\((?<text>[^)\\]*(?:\\.[^)\\]*)*)\)").unwrap();
 }
-// $[args](text)
 
 pub fn interpolate<'a>(string: &'a str, providers: &'_ HashMap<String, Value>) -> Cow<'a, str> {
     VARIABLES.replace_all(string, |captures: &Captures| {
         let var = captures.name("var").unwrap();
         providers
             .get(var.as_str())
-            .and_then(|var| {
-                Some(if let Value::String(string) = &var {
+            .map(|var| {
+                if let Value::String(string) = &var {
                     Cow::Borrowed(string.as_str())
                 } else {
                     Cow::Owned(var.to_string())
-                })
+                }
             })
             .unwrap_or(Cow::Borrowed("UNDEFINED"))
     })
@@ -408,17 +397,26 @@ pub fn format_string<'a>(string: &'a str) -> Line<'a> {
         let match_start = captures.get_match().start();
         let style = captures.name("args").unwrap();
         let text = captures.name("text").unwrap();
-        let span = Span::from(text.as_str()).style(get_style(style.as_str()));
+        let span = Span::from(text.as_str().replace(r"\)", ")").replace(r"\(", "("))
+            .style(get_style(style.as_str()));
 
         if match_start > start {
-            line.push_span(&string[start..match_start]);
+            line.push_span(
+                string[start..match_start]
+                    .replace(r"\)", ")")
+                    .replace(r"\(", "("),
+            );
         }
         line.push_span(span);
 
         start = captures.get_match().end()
     }
     if start < string.len() {
-        line.push_span(&string[start..string.len()]);
+        line.push_span(
+            string[start..string.len()]
+                .replace(r"\)", ")")
+                .replace(r"\(", "("),
+        );
     }
 
     line

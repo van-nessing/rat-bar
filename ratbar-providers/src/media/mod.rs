@@ -66,8 +66,8 @@ pub struct MediaFormat<'a> {
     length: String,
     position: String,
     progress: f32,
-    title: &'a str,
-    album: &'a str,
+    title: String,
+    album: String,
     artist: String,
     art: &'a str,
     buttons: String,
@@ -118,8 +118,8 @@ impl Default for MediaFormat<'_> {
             length: "xx:xx".into(),
             position: "xx:xx".into(),
             progress: 0.0,
-            title: "",
-            album: "",
+            title: String::new(),
+            album: String::new(),
             artist: String::new(),
             buttons: String::from("⏵⏵ ██ ⏴⏴"),
             art: "",
@@ -348,9 +348,22 @@ impl Provider for Media {
                 progress: ((100 * position.unwrap_or_default().as_secs())
                     .checked_div(length.as_ref().map(Duration::as_secs).unwrap_or(1))
                     .unwrap_or_default()) as f32,
-                title: &player.metadata.title,
-                album: &player.metadata.album,
-                artist: player.metadata.artists.join(", "),
+                title: player
+                    .metadata
+                    .title
+                    .replace(")", r"\)")
+                    .replace("(", r"\("),
+                album: player
+                    .metadata
+                    .album
+                    .replace(")", r"\)")
+                    .replace("(", r"\("),
+                artist: player
+                    .metadata
+                    .artists
+                    .join(", ")
+                    .replace(")", r"\)")
+                    .replace("(", r"\("),
                 art: player.metadata.art.strip_prefix("file://").unwrap_or(""),
                 buttons: format!("⏵⏵ {} ⏴⏴", player.status.button()),
             })
