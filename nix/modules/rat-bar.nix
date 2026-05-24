@@ -75,35 +75,33 @@ in
           block.title = "VISUALIZER";
           constraint = type "Fill" 1;
           component_type = provider {
-            provider = "visualizer";
-            layout = [ (graph "bins" "Gray") ];
+            layout = [ (graph "visualizer.bins" "Gray") ];
           };
         }
         {
           block.title = "CLOCK";
           constraint = type "Length" 30;
           component_type = provider {
-            provider = "clock";
             layout = [
               #1
               (hgroup [
-                (text "\${day}")
-                (text "\${time}")
-                (text "\${date}")
+                (text "\${clock.day}")
+                (text "\${clock.time}")
+                (text "\${clock.date}")
               ])
               #2
               (hgroup [
                 (vgroup [
                   (text "DAY")
-                  (text "\${day}")
+                  (text "\${clock.day}")
                 ])
                 (vgroup [
                   (text "TIME")
-                  (text "\${time}")
+                  (text "\${clock.time}")
                 ])
                 (vgroup [
                   (text "DATE")
-                  (text "\${date}")
+                  (text "\${clock.date}")
                 ])
               ])
             ];
@@ -113,27 +111,26 @@ in
           block.title = "NOW PLAYING";
           constraint = type "Length" 70;
           component_type = provider {
-            provider = "now-playing";
             layout = [
               #1
               (hgroup [
-                (image "art" 2)
+                (image "media.art" 2)
                 (width { Percentage = 70; } (
                   hgroup [
-                    (text "$[ul](\${title}) | $[ul](\${artist})")
+                    (text "$[ul](\${media.title}) | $[ul](\${media.artist})")
                   ]
                 ) # |> width { Percentage = 70; }
                 )
-                (text "\${buttons}")
-                (width { Percentage = 30; } (bar "progress" "Horizontal" "Red" "DarkGray"))
-                (text "\${position}/\${length}")
+                (text "\${media.buttons}")
+                (width { Percentage = 30; } (bar "media.progress" "Horizontal" "Red" "DarkGray"))
+                (text "\${media.position}/\${media.length}")
               ])
               #2
               (hgroup [
                 (image "art" 5)
                 (width { Percentage = 60; } (vgroup [
-                  (text "\${title}")
-                  (text "$[ul](\${album}) | $[ul](\${artist})")
+                  (text "\${media.title}")
+                  (text "$[ul](\${media.album}) | $[ul](\${media.artist})")
                 ])
                   # |> width { Percentage = 60; }
                 )
@@ -141,10 +138,10 @@ in
                   width = (type "Percentage" 40);
                   elements = [
                     (hgroup [
-                      (text "\${buttons}")
-                      (text "\${position}/\${length}")
+                      (text "\${media.buttons}")
+                      (text "\${media.position}/\${media.length}")
                     ])
-                    (bar "progress" "Horizontal" "Red" "DarkGray")
+                    (bar "media.progress" "Horizontal" "Red" "DarkGray")
                   ];
                 })
               ])
@@ -155,25 +152,24 @@ in
           block.title = "CPU";
           constraint = type "Length" 35;
           component_type = provider {
-            provider = "cpu";
             layout = [
               #1
               (hgroup [
-                (text "LOAD: \${load}%")
-                (text "FREQ: \${freq}GHZ")
-                (bar "load" "Horizontal" "Blue" "DarkGray")
+                (text "LOAD: \${cpu.load}%")
+                (text "FREQ: \${cpu.freq}GHZ")
+                (bar "cpu.load" "Horizontal" "Blue" "DarkGray")
               ])
               #2
               (hgroup [
                 (vgroup [
                   (text "LOAD")
-                  (text "\${load}%")
+                  (text "\${cpu.load}%")
                 ])
                 (vgroup [
                   (text "FREQ")
-                  (text "\${freq}GHZ")
+                  (text "\${cpu.freq}GHZ")
                 ])
-                (graph "acc" "Blue")
+                (graph "cpu.acc" "Blue")
               ])
             ];
           };
@@ -186,24 +182,24 @@ in
             layout = [
               #1
               (hgroup [
-                (text "\${used}GB/\${total}GB")
-                (bar "percent" "Horizontal" "Yellow" "DarkGray")
+                (text "\${mem.used}GB/\${mem.total}GB")
+                (bar "mem.percent" "Horizontal" "Yellow" "DarkGray")
               ])
               #2
               (hgroup [
                 (vgroup [
                   (text "FREE")
-                  (text "\${available}GB")
+                  (text "\${mem.available}GB")
                 ])
                 (vgroup [
                   (text "USED")
-                  (text "\${used}GB")
+                  (text "\${mem.used}GB")
                 ])
                 (vgroup [
                   (text "TOTAL")
-                  (text "\${total}GB")
+                  (text "\${mem.total}GB")
                 ])
-                (bar "percent" "Vertical" "Yellow" "DarkGray")
+                (bar "mem.percent" "Vertical" "Yellow" "DarkGray")
               ])
             ];
           };
@@ -212,17 +208,16 @@ in
           block.title = "NET";
           constraint = type "Length" 16;
           component_type = provider {
-            provider = "net";
             layout = [
               #1
               (hgroup [
-                (text "RX: \${recv}")
-                (text "TX: \${sent}")
+                (text "RX: \${net.recv}")
+                (text "TX: \${net.sent}")
               ])
               #2
               (no-center (vgroup [
-                (text "RX: \${recv}MB/S")
-                (text "TX: \${sent}MB/S")
+                (text "RX: \${net.recv}MB/S")
+                (text "TX: \${net.sent}MB/S")
               ])
                 # |> no-center
               )
@@ -245,7 +240,7 @@ in
             "1sec"
             ""
           ];
-          now-playing.command = [
+          media.command = [
             providers-rs
             "media"
             "1sec"
