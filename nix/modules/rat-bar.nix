@@ -37,9 +37,14 @@ let
         ;
     };
   graph =
-    var: fg:
+    var: fg: marker: fill:
     type "Graph" {
-      inherit var fg;
+      inherit
+        var
+        fg
+        marker
+        fill
+        ;
     };
   image =
     var: width:
@@ -75,7 +80,7 @@ in
           block.title = "VISUALIZER";
           constraint = type "Fill" 1;
           component_type = provider {
-            layout = [ (graph "visualizer.bins" "Gray") ];
+            layout = [ (graph "visualizer.bins" "Gray" "Braille" false) ];
           };
         }
         {
@@ -169,7 +174,7 @@ in
                   (text "FREQ")
                   (text "\${cpu.freq}GHZ")
                 ])
-                (graph "cpu.acc" "Blue")
+                (graph "cpu.acc" "Blue" "Octant" true)
               ])
             ];
           };

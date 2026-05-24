@@ -1,8 +1,8 @@
 use itertools::Itertools;
 use ratatui::style::Color;
 use ratatui::widgets::{
-    canvas::{Canvas, Line},
     Widget,
+    canvas::{Canvas, Line},
 };
 
 pub struct GraphWidget<'a> {
@@ -36,7 +36,8 @@ impl<'a> Widget for GraphWidget<'a> {
                         color: self.color,
                     });
                 }
-            });
+            })
+            .marker(ratatui::symbols::Marker::Octant);
         canvas.render(area, buf);
     }
 }

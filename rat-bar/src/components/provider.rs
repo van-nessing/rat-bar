@@ -24,6 +24,7 @@ use tokio::{
 use crate::{
     event::{Event, Request},
     widgets::{
+        bar_graph::{BarGraph, Marker},
         graph::GraphWidget,
         percentage_bar::BlockPercentageBar,
         scroll_text::{ScrollText, ScrollTextState},
@@ -112,6 +113,8 @@ pub enum ProviderLayoutType {
         width: Constraint,
         var: String,
         fg: String,
+        fill: bool,
+        marker: Marker,
     },
 }
 
@@ -271,7 +274,13 @@ impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
                     .render(area, buf);
                 }
             }
-            ProviderLayoutType::Graph { var, fg, .. } => {
+            ProviderLayoutType::Graph {
+                var,
+                fg,
+                fill,
+                marker,
+                ..
+            } => {
                 if let Some(data) = state
                     .variables
                     .get(var)
@@ -282,13 +291,15 @@ impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
                             .collect::<Option<Vec<_>>>()
                     })
                 {
-                    let fg = interpolate(fg, &state.variables);
+                    let fg = interpolate(fg, state.variables);
                     let color = get_color(&fg).unwrap_or(Color::White);
 
-                    GraphWidget {
+                    BarGraph {
                         percentages: data.as_slice(),
                         datapoint_count: data.len(),
                         color,
+                        fill: *fill,
+                        marker: *marker,
                     }
                     .render(area, buf);
                 }
@@ -298,7 +309,7 @@ impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
 }
 
 impl Widget for ProviderWidget<'_> {
-    fn render(mut self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
     {
