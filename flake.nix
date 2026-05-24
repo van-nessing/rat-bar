@@ -45,6 +45,7 @@
       homeModules = {
         default = import ./nix/modules/rat-bar.nix { inherit self; };
       };
+      lib = import ./nix/modules/utils.nix { };
       overlays.default = final: prev: {
         rat-bar = final.callPackage ./nix/pkgs/rat-bar.nix { inherit root; };
         ratbar-scripts-rs = final.callPackage ./nix/pkgs/rs-scripts.nix { inherit root; };
