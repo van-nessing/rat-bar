@@ -96,9 +96,9 @@ pub enum PlaybackStatus {
 impl PlaybackStatus {
     pub fn button(self) -> &'static str {
         match self {
-            PlaybackStatus::Playing => "||",
-            PlaybackStatus::Paused => "❙❯",
-            PlaybackStatus::Stopped => "██",
+            PlaybackStatus::Playing => "⏸ ",
+            PlaybackStatus::Paused => "⏵ ",
+            PlaybackStatus::Stopped => "⏹ ",
         }
     }
 }

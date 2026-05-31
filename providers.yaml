@@ -1,0 +1,61 @@
+# battery:
+#   command:
+#   - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
+#   - battery
+#   - 1sec
+#   - BAT0
+clock:
+  command:
+  - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
+  - clock
+  - 1sec
+  - day=%a
+  - time=%R
+  - date=%d.%m.%Y
+cpu:
+  command:
+  - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
+  - cpu
+  - 1sec
+  - ""
+mem:
+  command:
+  - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
+  - mem
+  - 1sec
+net:
+  command:
+  - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
+  - net
+  - 1sec
+  - "enp42s0"
+# niri:
+#   command:
+#   - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
+#   - niri
+now-playing:
+  command:
+  - /home/vanessa/Development/ratshell/rat-bar/target/debug/ratbar-providers-rs
+  - media
+  - 1sec
+  - paused
+  - cider
+  - firefox
+visualizer:
+  command:
+  - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
+  - visualizer
+  - 10ms
+# wifi:
+#   command:
+#   - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
+#   - wifi
+#   - 1sec
+pipewire:
+  command:
+  - nu
+  - --stdin
+  - /home/vanessa/Development/ratshell/rat-bar/example-config/providers.nu
+  - pipewire
+  # - /home/vanessa/Development/ratshell/rat-bar/target/debug/ratbar-providers-rs
+  # - button

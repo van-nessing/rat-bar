@@ -1,19 +1,20 @@
 use std::{borrow::Cow, collections::HashMap, path::PathBuf, process::Stdio, time::Duration};
 
 use color_eyre::{Section, SectionExt, eyre::Context};
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use futures_concurrency::future::Race;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use ratatui::{
-    layout::{Constraint, Direction, Flex, Layout, Size},
+    layout::{Constraint, Direction, Flex, Layout, Position, Rect, Size},
     style::{Color, Style},
     text::{Line, Span},
     widgets::{StatefulWidget, Widget},
 };
 use ratatui_image::protocol::Protocol;
 use regex::Captures;
-use serde::Deserialize;
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use serde_with::{FromInto, serde_as};
 use tokio::{io::AsyncReadExt, sync::mpsc::Sender};
 use tokio::{
@@ -22,36 +23,27 @@ use tokio::{
 };
 
 use crate::{
+    app::State,
     event::{Event, Request},
     widgets::{
         bar_graph::{BarGraph, Marker},
-        graph::GraphWidget,
         percentage_bar::BlockPercentageBar,
         scroll_text::{ScrollText, ScrollTextState},
     },
 };
 
-pub struct ProviderMeta {
+#[derive(Default)]
+pub struct ProviderState {
     pub variables: HashMap<String, Value>,
-    pub images: HashMap<String, AccessBuf<Option<Protocol>>>,
+    pub images: HashMap<String, AccessCache<Option<Protocol>>>,
 }
 
-pub struct ProviderProcess {
-    pub process: Child,
-}
-
-impl std::fmt::Debug for ProviderMeta {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
-    }
-}
-
-pub struct AccessBuf<T> {
+pub struct AccessCache<T> {
     val: T,
     accessed: bool,
 }
 
-impl<T> AccessBuf<T> {
+impl<T> AccessCache<T> {
     pub fn new(val: T) -> Self {
         Self {
             val,
@@ -81,6 +73,13 @@ fn default_flex() -> Flex {
 #[serde_as]
 #[derive(Debug, Deserialize)]
 pub enum ProviderLayoutType {
+    Interactable {
+        inner: Box<ProviderLayoutType>,
+        provider: String,
+        on_click: Option<String>,
+        on_scroll: Option<String>,
+        on_drag: Option<String>,
+    },
     HGroup {
         #[serde(default)]
         width: Constraint,
@@ -116,6 +115,19 @@ pub enum ProviderLayoutType {
         fill: bool,
         marker: Marker,
     },
+    Button {
+        provider: String,
+        name: String,
+        text: String,
+    },
+}
+
+pub struct Interactible {}
+
+#[derive(Debug, Deserialize)]
+pub enum InteractKind {
+    Simple,
+    Value { var: String },
 }
 
 #[derive(Debug)]
@@ -132,22 +144,85 @@ impl From<String> for Text {
         }
     }
 }
-
-pub struct ProviderWidget<'a> {
-    pub providers: &'a mut ProviderMeta,
-    pub layout: &'a mut [ProviderLayoutType],
-    pub requests: &'a mut Sender<Request>,
+#[derive(Serialize)]
+pub struct ButtonMessage<'a> {
+    name: &'a str,
+    event: MouseEventKind,
 }
-
-pub struct ProviderLayoutState<'a> {
-    pub variables: &'a HashMap<String, Value>,
-    pub images: &'a mut HashMap<String, AccessBuf<Option<Protocol>>>,
-    pub requests: &'a mut Sender<Request>,
+#[derive(Serialize)]
+pub struct Message<'a> {
+    name: &'a str,
+    value: f32,
+}
+#[derive(Serialize)]
+pub struct BarMessage<'a> {
+    message: &'a str,
+    percentage: f32,
 }
 
 impl ProviderLayoutType {
+    pub fn on_click(
+        &self,
+        provider: &str,
+        message: &str,
+        area: Rect,
+        position: Position,
+        dir: f32,
+        state: &mut State,
+    ) {
+        if let ProviderLayoutType::Bar {
+            width,
+            direction,
+            var,
+            fg,
+            bg,
+            ..
+        } = self
+        {
+            let percentage = state
+                .providers
+                .variables
+                .get(var)
+                .and_then(|var| var.as_f64())
+                .unwrap_or(0.0) as f32;
+            let new_percentage = match direction {
+                Direction::Horizontal => {
+                    let click = position.x - area.x;
+                    click as f32 / area.width as f32
+                }
+                // 0
+                // 1
+                // 2
+                // 3
+                // 4
+                // 5
+                // 6
+                // 7
+                Direction::Vertical => {
+                    (area.height - (position.y - area.y)) as f32 * 100.0 / area.height as f32
+                }
+            };
+            let difference = new_percentage - percentage;
+            let _ = state.requests.try_send(Request::MessageProvider {
+                provider: provider.to_string(),
+                message: serde_json::to_string(&json!({message: difference})).unwrap(),
+            });
+        } else {
+            let _ = state.requests.try_send(Request::MessageProvider {
+                provider: provider.to_string(),
+                message: serde_json::to_string(&json!({message: dir})).unwrap(),
+            });
+        }
+    }
+    pub fn on_scroll(&self, provider: &str, message: &str, dir: f32, state: &mut State) {
+        let _ = state.requests.try_send(Request::MessageProvider {
+            provider: provider.to_string(),
+            message: serde_json::to_string(&json!({message: dir})).unwrap(),
+        });
+    }
     pub fn width(&self, variables: &HashMap<String, Value>) -> Constraint {
         match self {
+            ProviderLayoutType::Interactable { inner, .. } => inner.width(variables),
             ProviderLayoutType::HGroup { width, .. } => *width,
             ProviderLayoutType::VGroup {
                 width, elements, ..
@@ -178,10 +253,21 @@ impl ProviderLayoutType {
             ProviderLayoutType::Image { width, .. } => Constraint::Length(*width),
             ProviderLayoutType::Bar { width, .. } => *width,
             ProviderLayoutType::Graph { width, .. } => *width,
+            ProviderLayoutType::Button {
+                provider,
+                name: message,
+                text,
+            } => {
+                let string = interpolate(text, variables);
+                let line = format_string(string.as_ref());
+
+                Constraint::Length(line.width() as u16)
+            }
         }
     }
     pub fn height(&self) -> Constraint {
         match self {
+            ProviderLayoutType::Interactable { inner, .. } => inner.height(),
             ProviderLayoutType::HGroup { .. } => Constraint::Fill(1),
             ProviderLayoutType::VGroup { .. } => Constraint::Fill(1),
             ProviderLayoutType::Text(..) => Constraint::Length(1),
@@ -191,12 +277,13 @@ impl ProviderLayoutType {
                 Direction::Vertical => Constraint::Fill(1),
             },
             ProviderLayoutType::Graph { .. } => Constraint::Fill(1),
+            ProviderLayoutType::Button { .. } => Constraint::Length(1),
         }
     }
 }
 
-impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
-    type State = ProviderLayoutState<'a>;
+impl StatefulWidget for &mut ProviderLayoutType {
+    type State = State;
     fn render(
         self,
         area: ratatui::prelude::Rect,
@@ -206,10 +293,52 @@ impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
         Self: Sized,
     {
         match self {
+            ProviderLayoutType::Interactable {
+                inner,
+                provider,
+                on_click,
+                on_scroll,
+                on_drag,
+            } => {
+                let (click, scroll) = state
+                    .mouse
+                    .capture_events(area)
+                    .into_iter()
+                    .partition::<Vec<_>, _>(|e| e.kind.is_down());
+                if let Some(message) = on_click {
+                    for event in click {
+                        let dir = match event.kind {
+                            MouseEventKind::Down(MouseButton::Left) => 1.0,
+                            MouseEventKind::Down(MouseButton::Right) => -1.0,
+                            _ => continue,
+                        };
+                        inner.on_click(
+                            provider,
+                            message,
+                            area,
+                            Position::new(event.column, event.row),
+                            dir,
+                            state,
+                        );
+                    }
+                }
+                if let Some(message) = on_scroll {
+                    for event in scroll {
+                        let dir = match event.kind {
+                            MouseEventKind::ScrollDown => -1.0,
+                            MouseEventKind::ScrollUp => 1.0,
+                            _ => continue,
+                        };
+                        inner.on_scroll(provider, message, dir, state);
+                    }
+                }
+
+                inner.render(area, buf, state);
+            }
             ProviderLayoutType::HGroup { flex, elements, .. } => {
                 let constraints = elements
                     .iter()
-                    .map(|element| element.width(state.variables));
+                    .map(|element| element.width(&state.providers.variables));
                 let layout =
                     area.layout_vec(&Layout::horizontal(constraints).spacing(1).flex(*flex));
                 for (area, element) in layout.into_iter().zip(elements.iter_mut()) {
@@ -223,21 +352,22 @@ impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
                 let layout = area.layout_vec(&Layout::vertical(constraints));
                 for (mut area, element) in layout.into_iter().zip(elements.iter_mut()) {
                     if *center {
-                        area = area.centered_horizontally(element.width(state.variables));
+                        area =
+                            area.centered_horizontally(element.width(&state.providers.variables));
                     }
                     element.render(area, buf, state);
                 }
             }
             ProviderLayoutType::Text(text) => {
-                let string = interpolate(&text.string, state.variables);
+                let string = interpolate(&text.string, &state.providers.variables);
                 let line = format_string(string.as_ref());
                 ScrollText { line }.render(area, buf, &mut text.state);
             }
             ProviderLayoutType::Image { var, .. } => {
-                if let Some(path) = state.variables.get(var) {
+                if let Some(path) = &state.providers.variables.get(var) {
                     let path = path.as_str().unwrap();
                     // image is present
-                    if let Some(access) = state.images.get_mut(path) {
+                    if let Some(access) = state.providers.images.get_mut(path) {
                         // image finished loading
                         if let Some(protocol) = access.get() {
                             ratatui_image::Image::new(protocol).render(area, buf);
@@ -257,22 +387,26 @@ impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
                 bg,
                 ..
             } => {
-                if let Some(percentage) = state.variables.get(var).and_then(|var| var.as_f64()) {
-                    let fg = interpolate(fg, state.variables);
-                    let bg = interpolate(bg, state.variables);
+                let percentage = state
+                    .providers
+                    .variables
+                    .get(var)
+                    .and_then(|var| var.as_f64())
+                    .unwrap_or(0.0) as f32;
+                let fg = interpolate(fg, &state.providers.variables);
+                let bg = interpolate(bg, &state.providers.variables);
 
-                    let fg = get_color(&fg).unwrap_or(Color::DarkGray);
-                    let bg = get_color(&bg).unwrap_or(Color::DarkGray);
+                let fg = get_color(&fg).unwrap_or(Color::White);
+                let bg = get_color(&bg).unwrap_or(Color::DarkGray);
 
-                    let style = Style::new().fg(fg).bg(bg);
+                let style = Style::new().fg(fg).bg(bg);
 
-                    BlockPercentageBar {
-                        style,
-                        percentage: percentage as f32,
-                        direction: *direction,
-                    }
-                    .render(area, buf);
+                BlockPercentageBar {
+                    style,
+                    percentage,
+                    direction: *direction,
                 }
+                .render(area, buf);
             }
             ProviderLayoutType::Graph {
                 var,
@@ -282,6 +416,7 @@ impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
                 ..
             } => {
                 if let Some(data) = state
+                    .providers
                     .variables
                     .get(var)
                     .and_then(|var| var.as_array())
@@ -291,7 +426,7 @@ impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
                             .collect::<Option<Vec<_>>>()
                     })
                 {
-                    let fg = interpolate(fg, state.variables);
+                    let fg = interpolate(fg, &state.providers.variables);
                     let color = get_color(&fg).unwrap_or(Color::White);
 
                     BarGraph {
@@ -304,34 +439,32 @@ impl<'a> StatefulWidget for &'a mut ProviderLayoutType {
                     .render(area, buf);
                 }
             }
-        }
-    }
-}
+            ProviderLayoutType::Button {
+                provider,
+                name,
+                text,
+            } => {
+                let captured = state.mouse.capture_events(area);
 
-impl Widget for ProviderWidget<'_> {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
-        if area.height == 0 {
-            return;
-        }
-        let layout = self.layout.get_mut(area.height as usize - 1);
+                for event in captured {
+                    state
+                        .requests
+                        .try_send(Request::MessageProvider {
+                            provider: provider.clone(),
+                            message: serde_json::to_string(&ButtonMessage {
+                                name,
+                                event: event.kind,
+                            })
+                            .unwrap(),
+                        })
+                        .unwrap()
+                }
 
-        let layout = if let Some(layout) = layout {
-            layout
-        } else {
-            self.layout.last_mut().unwrap()
-        };
-        layout.render(
-            area,
-            buf,
-            &mut ProviderLayoutState {
-                variables: &self.providers.variables,
-                images: &mut self.providers.images,
-                requests: self.requests,
-            },
-        );
+                let string = interpolate(text, &state.providers.variables);
+                let line = format_string(string.as_ref());
+                line.render(area, buf);
+            }
+        }
     }
 }
 
@@ -432,6 +565,7 @@ pub fn format_string<'a>(string: &'a str) -> Line<'a> {
 
     line
 }
+
 fn expand_home(path: &str) -> color_eyre::Result<PathBuf> {
     if path == "~" {
         return Ok(PathBuf::from(std::env::var("HOME")?));
@@ -441,21 +575,18 @@ fn expand_home(path: &str) -> color_eyre::Result<PathBuf> {
     }
     Ok(PathBuf::from(path))
 }
-
-pub async fn provider_events(
-    sender: Sender<Event>,
+pub async fn init_providers(
     providers: HashMap<String, crate::config::Provider>,
-) -> color_eyre::Result<()> {
-    let providers = providers
+) -> color_eyre::Result<HashMap<String, Child>> {
+    providers
         .into_iter()
         .map(|(name, config)| {
             let (program, args) = config
                 .command
                 .split_first()
                 .ok_or_else(|| color_eyre::eyre::eyre!("provider program missing"))?;
-
-            let program_path = expand_home(program)?;
-            let mut command = tokio::process::Command::new(&program_path);
+            let path = expand_home(program)?;
+            let mut command = tokio::process::Command::new(&path);
             command
                 .args(args)
                 .kill_on_drop(true)
@@ -463,69 +594,64 @@ pub async fn provider_events(
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()
-                .map(|child| (name.clone(), ProviderProcess { process: child }))
+                .map(|child| (name.clone(), child))
                 .map_err(color_eyre::Report::from)
                 .with_section(move || name.header("provider"))
-                .with_section(move || {
-                    program_path
-                        .to_string_lossy()
-                        .to_string()
-                        .header("provider")
-                })
+                .with_section(move || path.to_string_lossy().to_string().header("command"))
                 .with_section(move || args.iter().join(" ").header("arguments"))
         })
-        .collect::<Result<HashMap<_, _>, _>>()?;
+        .collect()
+}
 
-    let futures = providers
+pub async fn provider_events(
+    sender: Sender<Event>,
+    providers: HashMap<String, Child>,
+) -> color_eyre::Result<()> {
+    providers
         .into_iter()
-        .map(|(name, mut provider)| {
+        .map(|(provider, mut child)| {
             let sender = sender.clone();
             async move {
-                let mut buf = String::new();
-                let mut stdout = provider.process.stdout.as_mut().unwrap();
-                let stderr = provider.process.stderr.as_mut().unwrap();
-                let mut reader = BufReader::new(&mut stdout);
+                let result = async || {
+                    let mut buf = String::new();
+                    let mut stdout = child.stdout.take().unwrap();
+                    let mut stderr = child.stderr.take().unwrap();
+                    let mut reader = BufReader::new(&mut stdout);
+                    loop {
+                        buf.clear();
+                        reader.read_line(&mut buf).await?;
 
-                let result = async || loop {
-                    buf.clear();
-                    reader.read_line(&mut buf).await?;
-
-                    let variables = match serde_json::from_str(&buf) {
-                        Ok(var) => var,
-                        Err(e) => {
-                            let mut err = Vec::new();
-                            let another = tokio::time::timeout(
-                                Duration::from_secs(1),
-                                stderr.read_to_end(&mut err),
-                            )
-                            .await
-                            .ok()
-                            .and_then(|ok| ok.err());
-                            let err = color_eyre::Result::<()>::Err(e.into())
-                                .suppress_backtrace(true)
-                                .with_section(|| name.header("provider"))
-                                .with_section(|| buf.header("stdout"))
-                                .wrap_err_with(|| String::from_utf8_lossy(&err).to_string());
-                            if let Some(another) = another {
-                                return err.wrap_err(another);
-                            } else {
+                        let variables = match serde_json::from_str(&buf) {
+                            Ok(var) => var,
+                            Err(e) => {
+                                let mut err = String::new();
+                                tokio::time::timeout(
+                                    Duration::from_secs(1),
+                                    stderr.read_to_string(&mut err),
+                                )
+                                .await;
+                                let err = color_eyre::Result::<()>::Err(e.into())
+                                    .suppress_backtrace(true)
+                                    .with_section(|| provider.header("provider"))
+                                    .with_section(|| buf.header("stdout"))
+                                    .with_section(|| err.header("stderr"));
                                 return err;
                             }
-                        }
-                    };
-                    sender
-                        .send(Event::UpdateProvider {
-                            name: name.clone(),
-                            variables,
-                        })
-                        .await?;
+                        };
+                        sender
+                            .send(Event::UpdateProvider {
+                                name: provider.clone(),
+                                variables,
+                            })
+                            .await?;
+                    }
                 };
                 let result = result().await;
-                let _ = provider.process.kill().await;
+                let _ = child.kill().await;
                 result
             }
         })
-        .collect::<Vec<_>>();
-
-    futures.race().await
+        .collect::<Vec<_>>()
+        .race()
+        .await
 }

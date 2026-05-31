@@ -1,13 +1,17 @@
 use std::{
     path::PathBuf,
+    process::Stdio,
     sync::{Arc, atomic::AtomicBool},
+    time::Duration,
 };
 
 use clap::Parser;
 use color_eyre::eyre::eyre;
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use futures_concurrency::future::Race;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::{app::App, components::BarComponent, config::Config, event::EventTask, ui::Ui};
+use crate::{app::App, components::BarComponent, config::Config, event::run_event_tasks, ui::Ui};
 
 pub mod app;
 pub mod components;
@@ -32,7 +36,7 @@ async fn main() -> color_eyre::Result<()> {
     let args = Args::parse();
 
     let (event_sender, event_receiver) = tokio::sync::mpsc::channel(32);
-    let (request_sender, request_receiver) = tokio::sync::mpsc::channel(32);
+    let (request_sender, requests_receiver) = tokio::sync::mpsc::channel(32);
 
     let running = Arc::new(AtomicBool::new(true));
 
@@ -62,29 +66,27 @@ async fn main() -> color_eyre::Result<()> {
     };
 
     let ui = Ui {
-        component: BarComponent {
-            constraint: ratatui::layout::Constraint::Fill(1),
-            block: None,
-            component_type: components::BarComponentType::Group {
-                flex: ratatui::layout::Flex::SpaceAround,
-                spacing: 0.into(),
-                components: config.layout,
-            },
-        },
+        components: config.layout,
     };
 
     let app = App::new(running.clone(), event_receiver, request_sender, ui).await?;
-    let dispatcher = EventTask::new(
+    let dispatcher = run_event_tasks(
         running.clone(),
         event_sender,
-        request_receiver,
+        requests_receiver,
         config.providers,
-    )?;
+    );
 
-    let terminal = ratatui::init();
+    let mut terminal = ratatui::init();
 
-    let result = (app.run(terminal), dispatcher.run()).race().await;
+    let b = terminal.backend_mut();
+    crossterm::execute!(b, EnableMouseCapture)?;
+
+    let result = (app.run(&mut terminal), dispatcher).race().await;
     running.store(false, std::sync::atomic::Ordering::Relaxed);
+
+    let b = terminal.backend_mut();
+    crossterm::execute!(b, DisableMouseCapture)?;
 
     ratatui::restore();
     result

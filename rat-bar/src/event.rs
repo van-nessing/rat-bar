@@ -1,4 +1,7 @@
-use color_eyre::eyre::Context;
+use color_eyre::{
+    Section, SectionExt,
+    eyre::{self, Context},
+};
 use futures_concurrency::future::Race;
 use image::load_from_memory;
 use ratatui::{crossterm::event::Event as CrosstermEvent, layout::Size};
@@ -10,17 +13,19 @@ use std::{
     time::Duration,
 };
 use tokio::{
+    io::AsyncWriteExt,
+    process::ChildStdin,
     signal::unix::{Signal, SignalKind, signal},
     sync::mpsc::{Receiver, Sender},
 };
 use tokio_stream::StreamExt;
 
-use crate::components::provider::{ProviderMeta, provider_events};
+use crate::components::provider::{ProviderState, init_providers, provider_events};
 
 pub enum Event {
     Crossterm(CrosstermEvent),
     UpdateProviders {
-        providers: ProviderMeta,
+        providers: ProviderState,
     },
     UpdateProvider {
         name: String,
@@ -34,49 +39,36 @@ pub enum Event {
 
 pub enum Request {
     LoadImage { path: String, size: Size },
+    MessageProvider { provider: String, message: String },
 }
 
-/// A thread that handles reading crossterm events and emitting tick events on a regular schedule.
-pub struct EventTask {
+pub async fn run_event_tasks(
+    running: Arc<AtomicBool>,
     sender: Sender<Event>,
     requests: Receiver<Request>,
     providers: HashMap<String, crate::config::Provider>,
-    running: Arc<AtomicBool>,
-    picker: Picker,
-}
-
-impl EventTask {
-    /// Constructs a new instance of [`EventThread`].
-    pub fn new(
-        running: Arc<AtomicBool>,
-        sender: Sender<Event>,
-        requests: Receiver<Request>,
-        providers: HashMap<String, crate::config::Provider>,
-    ) -> color_eyre::Result<Self> {
-        Ok(Self {
-            sender,
-            running,
-            requests,
-            providers,
-            picker: Picker::from_query_stdio()?,
-        })
-    }
-
-    pub async fn run(self) -> color_eyre::Result<()> {
-        (
-            crossterm_events(self.sender.clone()),
-            signal_events(self.sender.clone()),
-            provider_events(self.sender.clone(), self.providers),
-            handle_requests(self.sender.clone(), self.requests, self.picker),
-        )
-            .race()
-            .await
-    }
+) -> color_eyre::Result<()> {
+    let picker = Picker::from_query_stdio()?;
+    let mut providers = init_providers(providers).await?;
+    let providers_input = providers
+        .iter_mut()
+        .map(|(k, process)| (k.clone(), process.stdin.take().unwrap()))
+        .collect();
+    (
+        crossterm_events(sender.clone()),
+        signal_events(sender.clone()),
+        provider_events(sender.clone(), providers),
+        // provider_events(sender.clone(), providers),
+        handle_requests(sender.clone(), requests, providers_input, picker),
+    )
+        .race()
+        .await
 }
 
 async fn handle_requests(
     sender: Sender<Event>,
     mut requests: Receiver<Request>,
+    mut providers: HashMap<String, ChildStdin>,
     picker: Picker,
 ) -> color_eyre::Result<()> {
     while let Some(request) = requests.recv().await {
@@ -103,6 +95,19 @@ async fn handle_requests(
                     }
                     color_eyre::Result::<()>::Ok(())
                 });
+            }
+            Request::MessageProvider { provider, message } => {
+                let stdin = providers
+                    .get_mut(&provider)
+                    .ok_or_else(|| {
+                        eyre::eyre!("attempted to send message to non existing provider")
+                    })
+                    .with_section(|| provider.header("provider"))
+                    .with_section(|| message.clone().header("message"))?;
+
+                stdin.write_all(message.as_bytes()).await?;
+                stdin.write_all(b"\n").await?;
+                stdin.flush().await?;
             }
         }
     }

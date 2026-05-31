@@ -1,0 +1,246 @@
+- block:
+    title: FOCUS
+  component_type:
+    Provider:
+      layout:
+      - Text: ${niri.app_id} | $[ul](${niri.title})
+      - VGroup:
+          center: false
+          elements:
+          - Text: ${niri.app_id}
+          - Text: ${niri.title}
+      provider: niri
+  constraint:
+    Fill: 1
+- block:
+    title: VISUALIZER
+  component_type:
+    Provider:
+      layout:
+      - Graph:
+          fg: Gray
+          fill: true
+          marker: Braille
+          var: visualizer.bins
+      provider: visualizer
+  constraint:
+    Length: 27
+- block:
+    title: CLOCK
+  component_type:
+    Provider:
+      layout:
+      - HGroup:
+          elements:
+          - Text: ${clock.day}
+          - Text: ${clock.time}
+          - Text: ${clock.date}
+      - HGroup:
+          elements:
+          - VGroup:
+              elements:
+              - Text: DAY
+              - Text: ${clock.day}
+          - VGroup:
+              elements:
+              - Text: TIME
+              - Text: ${clock.time}
+          - VGroup:
+              elements:
+              - Text: DATE
+              - Text: ${clock.date}
+      provider: clock
+  constraint:
+    Length: 30
+- block:
+    title: NOW PLAYING
+  component_type:
+    Provider:
+      layout:
+      - HGroup:
+          elements:
+          - Image:
+              var: now-playing.art
+              width: 2
+          - HGroup:
+              elements:
+              - Text: $[ul](${now-playing.title}) | $[ul](${now-playing.artist})
+              width:
+                Percentage: 70
+          - Text: ${now-playing.buttons}
+          - Bar:
+              bg: DarkGray
+              direction: Horizontal
+              fg: Red
+              var: progress
+              width:
+                Percentage: 30
+          - Text: ${now-playing.position}/${now-playing.length}
+      - HGroup:
+          elements:
+          - Image:
+              var: art
+              width: 5
+          - VGroup:
+              elements:
+              - Text: ${now-playing.title}
+              - Text: $[ul](${now-playing.album}) | $[ul](${now-playing.artist})
+              width:
+                Percentage: 60
+          - VGroup:
+              elements:
+              - HGroup:
+                  elements:
+                  - HGroup:
+                      elements:
+                      - Button:
+                          name: prev
+                          provider: now-playing
+                          text: "⏩"
+                      - Button:
+                          name: play
+                          provider: now-playing
+                          text: "${now-playing.button_symbol}"
+                      - Button:
+                          name: next
+                          provider: now-playing
+                          text: "⏩"
+                      width:
+                        Length: 7
+                  # - Text: ${now-playing.buttons}
+                  - Text: ${now-playing.position}/${now-playing.length}
+              - Bar:
+                  bg: DarkGray
+                  direction: Horizontal
+                  fg: Red
+                  var: now-playing.progress
+              width:
+                Percentage: 40
+      provider: now-playing
+  constraint:
+    Length: 60
+- block:
+    title: CPU
+  component_type:
+    Provider:
+      layout:
+      - HGroup:
+          elements:
+          - Text: ${cpu.load}%
+          - Bar:
+              bg: DarkGray
+              direction: Horizontal
+              fg: Gray
+              var: load
+      - HGroup:
+          elements:
+          - VGroup:
+              elements:
+              - Text: LOAD
+              - Text: ${cpu.load}%
+          - VGroup:
+              elements:
+              - Text: FREQ
+              - Text: ${cpu.freq}GHZ
+          - VGroup:
+              elements:
+              - Text: TEMP
+              - Text: ${cpu.temp}°C
+          - Graph:
+              fg: Blue
+              fill: true
+              marker: Octant
+              var: cpu.acc
+      provider: cpu
+  constraint:
+    Length: 27
+- block:
+    title: MEM
+  component_type:
+    Provider:
+      layout:
+      - HGroup:
+          elements:
+          - Text: ${mem.used}GB/${mem.total}GB
+          - Bar:
+              bg: DarkGray
+              direction: Horizontal
+              fg: Yellow
+              var: mem.percent
+      - HGroup:
+          elements:
+          - VGroup:
+              elements:
+              - Text: 'FREE: ${mem.available}GB'
+              - Text: 'USED: ${mem.used}GB'
+          - Bar:
+              bg: DarkGray
+              direction: Vertical
+              fg: Yellow
+              var: mem.percent
+      provider: mem
+  constraint:
+    Length: 20
+- block:
+    title: NET
+  component_type:
+    Provider:
+      layout:
+      - HGroup:
+          elements:
+          - Text: 'RX: ${net.recv}'
+          - Text: 'TX: ${net.sent}'
+      - VGroup:
+          center: false
+          elements:
+          - Text: 'RX: ${net.recv}MB/S'
+          - Text: 'TX: ${net.sent}MB/S'
+      provider: net
+  constraint:
+    Length: 16
+- block:
+    title: WIFI
+  component_type:
+    Provider:
+      layout:
+      - Text: ${wifi.ssid} ${wifi.symbol}
+      - VGroup:
+          elements:
+          - HGroup:
+              elements:
+              - Text: ${wifi.ssid}
+              - Text: ${wifi.symbol}
+      provider: wifi
+  constraint:
+    Length: 16
+- block:
+    title: BAT
+  component_type:
+    Provider:
+      layout:
+      - Text: ${battery.charge}%
+      - VGroup:
+          elements:
+          - HGroup:
+              elements:
+              - Text: ${battery.charge}%
+              - Bar:
+                  bg: DarkGray
+                  direction: Horizontal
+                  fg: Gray
+                  var: battery.charge
+          - Text: ${battery.status}
+      provider: battery
+  constraint:
+    Length: 16
+- block:
+    title: BAT
+  component_type:
+    Provider:
+      layout:
+      - Button:
+          provider: button
+          name: test
+          text: "$[rv,bo](b: ${button.i})"
+  constraint:
+    Length: 16

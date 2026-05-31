@@ -1,5 +1,6 @@
 use crate::{
     battery::{Battery, BatteryArgs},
+    button::{Button, ButtonArgs},
     clock::{Clock, ClockArgs},
     cpu::{Cpu, CpuArgs},
     media::{Media, MediaArgs},
@@ -22,6 +23,7 @@ mod battery;
 mod clock;
 mod cpu;
 // mod gpu;
+mod button;
 mod media;
 mod mem;
 mod net;
@@ -45,6 +47,7 @@ fn main() -> eyre::Result<()> {
         Command::Niri(args) => Niri::init(args)?.run(),
         Command::Visualizer(args) => Visualizer::init(args)?.run(),
         Command::Wifi(args) => Wifi::init(args)?.run(),
+        Command::Button(args) => Button::init(args)?.run(),
     }
 }
 
@@ -60,6 +63,7 @@ pub enum Command {
     Niri(NiriArgs),
     Visualizer(VisualizerArgs),
     Wifi(WifiArgs),
+    Button(ButtonArgs),
 }
 
 pub trait Provider

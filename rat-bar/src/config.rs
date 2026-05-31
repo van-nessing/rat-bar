@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_with::{DurationSecondsWithFrac, serde_as};
 use tokio::process::Child;
 
-use crate::components::{BarComponent, BarComponentType};
+use crate::components::BarComponent;
 
 #[derive(Deserialize)]
 pub struct Config {

@@ -1,0 +1,228 @@
+- block:
+    title: FOCUS
+  layout:
+  - Text: ${niri.app_id} | $[ul](${niri.title})
+  - VGroup:
+      center: false
+      elements:
+      - Text: ${niri.app_id}
+      - Text: ${niri.title}
+- block:
+    title: VISUALIZER
+  constraint:
+    Length: 27
+  layout:
+  - Graph:
+      fg: Gray
+      fill: true
+      marker: Braille
+      var: visualizer.bins
+- block:
+    title: CLOCK
+  constraint:
+    Length: 30
+  layout:
+  - HGroup:
+      elements:
+      - Text: ${clock.day}
+      - Text: ${clock.time}
+      - Text: ${clock.date}
+  - HGroup:
+      elements:
+      - VGroup:
+          elements:
+          - Text: DAY
+          - Text: ${clock.day}
+      - VGroup:
+          elements:
+          - Text: TIME
+          - Text: ${clock.time}
+      - VGroup:
+          elements:
+          - Text: DATE
+          - Text: ${clock.date}
+- block:
+    title: NOW PLAYING
+  constraint:
+    Length: 60
+  layout:
+  - HGroup:
+      elements:
+      - Image:
+          var: now-playing.art
+          width: 2
+      - HGroup:
+          elements:
+          - Text: $[ul](${now-playing.title}) | $[ul](${now-playing.artist})
+          width:
+            Percentage: 70
+      - Text: ${now-playing.buttons}
+      - Bar:
+          bg: DarkGray
+          direction: Horizontal
+          fg: Red
+          var: progress
+          width:
+            Percentage: 30
+      - Text: ${now-playing.position}/${now-playing.length}
+  - HGroup:
+      elements:
+      - Image:
+          var: art
+          width: 5
+      - VGroup:
+          elements:
+          - Text: ${now-playing.title}
+          - Text: $[ul](${now-playing.album}) | $[ul](${now-playing.artist})
+          width:
+            Percentage: 60
+      - VGroup:
+          elements:
+          - HGroup:
+              elements:
+              - HGroup:
+                  elements:
+                  - Button:
+                      name: prev
+                      provider: now-playing
+                      text: ⏩
+                  - Button:
+                      name: play
+                      provider: now-playing
+                      text: ${now-playing.button_symbol}
+                  - Button:
+                      name: next
+                      provider: now-playing
+                      text: ⏩
+                  width:
+                    Length: 7
+              - Text: ${now-playing.position}/${now-playing.length}
+          - Bar:
+              bg: DarkGray
+              direction: Horizontal
+              fg: Red
+              var: now-playing.progress
+          width:
+            Percentage: 40
+- block:
+    title: CPU
+  constraint:
+    Length: 27
+  layout:
+  - HGroup:
+      elements:
+      - Text: ${cpu.load}%
+      - Bar:
+          bg: DarkGray
+          direction: Horizontal
+          fg: Gray
+          var: load
+  - HGroup:
+      elements:
+      - VGroup:
+          elements:
+          - Text: LOAD
+          - Text: ${cpu.load}%
+      - VGroup:
+          elements:
+          - Text: FREQ
+          - Text: ${cpu.freq}GHZ
+      - VGroup:
+          elements:
+          - Text: TEMP
+          - Text: ${cpu.temp}°C
+      - Graph:
+          fg: Blue
+          fill: true
+          marker: Octant
+          var: cpu.acc
+- block:
+    title: MEM
+  constraint:
+    Length: 20
+  layout:
+  - HGroup:
+      elements:
+      - Text: ${mem.used}GB/${mem.total}GB
+      - Bar:
+          bg: DarkGray
+          direction: Horizontal
+          fg: Yellow
+          var: mem.percent
+  - HGroup:
+      elements:
+      - VGroup:
+          elements:
+          - Text: 'FREE: ${mem.available}GB'
+          - Text: 'USED: ${mem.used}GB'
+      - Bar:
+          bg: DarkGray
+          direction: Vertical
+          fg: Yellow
+          var: mem.percent
+- block:
+    title: NET
+  constraint:
+    Length: 16
+  layout:
+  - HGroup:
+      elements:
+      - Text: 'RX: ${net.recv}'
+      - Text: 'TX: ${net.sent}'
+  - VGroup:
+      center: false
+      elements:
+      - Text: 'RX: ${net.recv}MB/S'
+      - Text: 'TX: ${net.sent}MB/S'
+- block:
+    title: WIFI
+  constraint:
+    Length: 16
+  layout:
+  - Text: ${wifi.ssid} ${wifi.symbol}
+  - VGroup:
+      elements:
+      - HGroup:
+          elements:
+          - Text: ${wifi.ssid}
+          - Text: ${wifi.symbol}
+- block:
+    title: BAT
+  constraint:
+    Length: 16
+  layout:
+  - Text: ${battery.charge}%
+  - VGroup:
+      elements:
+      - HGroup:
+          elements:
+          - Text: ${battery.charge}%
+          - Bar:
+              bg: DarkGray
+              direction: Horizontal
+              fg: Gray
+              var: battery.charge
+      - Text: ${battery.status}
+- block:
+    title: BAT
+  constraint:
+    Length: 16
+  layout:
+  - VGroup:
+      elements:
+      - Interactable:
+          provider: pipewire
+          on_click: add_vol
+          on_scroll: add_vol
+          inner:
+            Text: '$[rv,bo](b: ${pipewire.muted})'
+      - Interactable:
+          provider: pipewire
+          on_click: add_vol
+          on_scroll: add_vol
+          inner:
+            Bar:
+                bg: DarkGray
+                fg: Gray
+                direction: Vertical
+                var: pipewire.volume

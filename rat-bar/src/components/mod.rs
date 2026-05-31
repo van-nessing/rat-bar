@@ -1,16 +1,14 @@
+use crossterm::event::MouseEvent;
 use ratatui::{
-    layout::{Constraint, Flex, Layout, Margin, Spacing},
+    layout::{Constraint, Flex, Layout, Margin, Position, Spacing},
     widgets::{Block, StatefulWidget, Widget},
 };
 use serde::Deserialize;
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    app::Meta,
-    components::{
-        diagnostics::Diagnostics,
-        provider::{ProviderLayoutType, ProviderWidget},
-    },
+    app::{Meta, State},
+    components::{diagnostics::Diagnostics, provider::ProviderLayoutType},
     event::Request,
 };
 
@@ -23,50 +21,12 @@ pub struct BarComponent {
     pub constraint: Constraint,
     #[serde(default)]
     pub block: Option<ConfigBlock>,
-    pub component_type: BarComponentType,
+    pub layout: Vec<ProviderLayoutType>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ConfigBlock {
     title: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub enum BarComponentType {
-    Group {
-        #[serde(default)]
-        flex: Flex,
-        #[serde(default)]
-        spacing: Spacing,
-        components: Vec<BarComponent>,
-    },
-    Provider {
-        layout: Vec<ProviderLayoutType>,
-    },
-    Diagnosticts {},
-}
-
-pub struct BarComponentWidget<'a> {
-    inner: &'a mut BarComponent,
-    requests: &'a mut Sender<Request>,
-    meta: &'a mut Meta,
-}
-
-impl BarComponent {
-    pub fn constraint(&self) -> Constraint {
-        self.constraint
-    }
-    pub fn as_widget<'a>(
-        &'a mut self,
-        meta: &'a mut Meta,
-        requests: &'a mut Sender<Request>,
-    ) -> BarComponentWidget<'a> {
-        BarComponentWidget {
-            inner: self,
-            meta,
-            requests,
-        }
-    }
 }
 
 impl ConfigBlock {
@@ -75,60 +35,30 @@ impl ConfigBlock {
     }
 }
 
-impl<'a> Widget for &mut BarComponentWidget<'a> {
-    fn render(self, mut area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
-        if let Some(block) = self.inner.block.as_ref().map(ConfigBlock::to_block) {
+impl<'a> StatefulWidget for &'a mut BarComponent {
+    type State = State;
+
+    fn render(
+        self,
+        mut area: ratatui::prelude::Rect,
+        buf: &mut ratatui::prelude::Buffer,
+        state: &mut Self::State,
+    ) {
+        if let Some(block) = self.block.as_ref().map(ConfigBlock::to_block) {
             (&block).render(area, buf);
             area = block.inner(area);
         }
-        match &mut self.inner.component_type {
-            BarComponentType::Group {
-                components,
-                flex,
-                spacing,
-            } => {
-                let spacing = spacing.clone();
-                let layout = Layout::horizontal(components.iter().map(BarComponent::constraint))
-                    .flex(*flex)
-                    .horizontal_margin(1)
-                    .spacing(spacing);
-                let rects = area.layout_vec(&layout);
-
-                for (component, area) in components.iter_mut().zip(rects) {
-                    component
-                        .as_widget(self.meta, self.requests)
-                        .render(area, buf);
-                }
-            }
-            BarComponentType::Provider { layout } => {
-                ProviderWidget {
-                    providers: &mut self.meta.provider,
-                    layout: layout.as_mut_slice(),
-                    requests: self.requests,
-                }
-                .render(
-                    area.inner(Margin {
-                        horizontal: 1,
-                        vertical: 0,
-                    }),
-                    buf,
-                );
-            }
-            BarComponentType::Diagnosticts {} => {
-                Diagnostics {
-                    meta: &self.meta.diagnostics,
-                }
-                .render(
-                    area.inner(Margin {
-                        horizontal: 1,
-                        vertical: 0,
-                    }),
-                    buf,
-                );
-            }
+        if area.height == 0 {
+            return;
         }
+        // let layout = self.layout.get_mut(area.height as usize - 1);
+        let layout = &mut self.layout;
+
+        let layout = if let Some(layout) = layout.get_mut(area.height as usize - 1) {
+            layout
+        } else {
+            layout.last_mut().unwrap()
+        };
+        layout.render(area, buf, state);
     }
 }

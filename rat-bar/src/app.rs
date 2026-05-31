@@ -8,17 +8,18 @@ use std::{
 };
 
 use color_eyre::eyre::eyre;
+use crossterm::event::{EnableMouseCapture, MouseEvent, MouseEventKind};
 use ratatui::{
     DefaultTerminal,
     crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    layout::{Constraint, Layout, Position, Rect},
 };
-use ratatui_image::picker::Picker;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
     components::{
         diagnostics::DiagnosticsMeta,
-        provider::{AccessBuf, ProviderMeta},
+        provider::{AccessCache, ProviderState},
     },
     event::{Event, Request},
     ui::Ui,
@@ -26,51 +27,50 @@ use crate::{
 
 // #[derive(Debug)]
 pub struct Meta {
-    pub provider: ProviderMeta,
+    pub provider: ProviderState,
     pub diagnostics: DiagnosticsMeta,
 }
 
-#[derive(Debug)]
-pub struct Record<T = f32> {
-    max_points: usize,
-    datapoints: Vec<T>,
-}
 pub struct App {
     pub ui: Ui,
-    pub meta: Meta,
-    pub picker: Picker,
+    pub state: State,
     pub running: Arc<AtomicBool>,
     pub events: Receiver<Event>,
-    pub requests: Sender<Request>,
 }
 
-impl<T: Default + Clone> Record<T> {
-    pub fn new(max_points: usize) -> Self {
-        Self {
-            max_points,
-            datapoints: vec![T::default(); max_points],
-        }
-    }
-    pub fn push_point(&mut self, value: T) {
-        self.datapoints.rotate_left(1);
-        *self.datapoints.last_mut().unwrap() = value;
-    }
-    pub fn datapoints(&self) -> &[T] {
-        &self.datapoints
-    }
-    pub fn max_points(&self) -> usize {
-        self.max_points
-    }
+pub struct State {
+    pub providers: ProviderState,
+    pub requests: Sender<Request>,
+    pub mouse: MouseState,
+    pub iteration: u32,
 }
-impl Default for Meta {
+
+pub struct Dragging {
+    pub start: Position,
+}
+
+pub struct MouseState {
+    pub events: Vec<MouseEvent>,
+    pub dragging: Option<Dragging>,
+    pub scroll_speed: f32,
+}
+impl Default for MouseState {
     fn default() -> Self {
         Self {
-            provider: ProviderMeta {
-                variables: HashMap::new(),
-                images: HashMap::new(),
-            },
-            diagnostics: DiagnosticsMeta::default(),
+            events: Default::default(),
+            dragging: Default::default(),
+            scroll_speed: 1.0,
         }
+    }
+}
+impl MouseState {
+    pub fn capture_events(&mut self, area: Rect) -> Vec<MouseEvent> {
+        let (captured, events) = self
+            .events
+            .drain(..)
+            .partition(|event| area.contains(Position::new(event.column, event.row)));
+        self.events = events;
+        captured
     }
 }
 
@@ -83,17 +83,20 @@ impl App {
         ui: Ui,
     ) -> color_eyre::Result<Self> {
         Ok(Self {
-            meta: Default::default(),
-            picker: Picker::from_query_stdio()?,
             ui,
             events,
             running,
-            requests,
+            state: State {
+                providers: ProviderState::default(),
+                requests,
+                mouse: MouseState::default(),
+                iteration: 0,
+            },
         })
     }
 
     /// Run the application's main loop.
-    pub async fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
+    pub async fn run(mut self, terminal: &mut DefaultTerminal) -> color_eyre::Result<()> {
         let refresh_rate = Duration::from_secs(1) / 60;
         let mut last_render = Instant::now() - refresh_rate;
 
@@ -102,26 +105,34 @@ impl App {
             // limit refresh rate
             if render_now.duration_since(last_render) > refresh_rate {
                 // reset image access
-                self.meta
-                    .provider
+                self.state
+                    .providers
                     .images
                     .values_mut()
                     .for_each(|access| access.reset());
 
-                terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
+                terminal.draw(|frame| {
+                    let [dbug, rest] = frame.area().layout(&Layout::horizontal(&[
+                        Constraint::Length(6),
+                        Constraint::Fill(1),
+                    ]));
+                    frame.render_widget(self.state.iteration.to_string(), dbug);
+                    frame.render_widget(&mut self, rest);
+                })?;
 
-                // remove all image protocls from cache that weren't rendered this frame
-                self.meta
-                    .provider
+                // remove all image protocols from cache that weren't rendered this frame
+                self.state
+                    .providers
                     .images
                     .retain(|_, access| access.accessed());
 
                 last_render = render_now;
-                self.meta.diagnostics.render_time = render_now.elapsed();
+                self.state.iteration += 1;
+                // self.meta.diagnostics.render_time = render_now.elapsed();
             }
 
-            self.meta.diagnostics.total_ticks += 1;
-            self.meta.diagnostics.queued_events = self.events.len() as u64;
+            // self.meta.diagnostics.total_ticks += 1;
+            // self.meta.diagnostics.queued_events = self.events.len() as u64;
 
             let event = self
                 .events
@@ -138,39 +149,38 @@ impl App {
                             if key_event.kind == crossterm::event::KeyEventKind::Press =>
                         {
                             self.handle_key_events(key_event)?;
-                            self.meta.diagnostics.event_times.crossterm = event_now.elapsed();
+                            // self.meta.diagnostics.event_times.crossterm = event_now.elapsed();
                         }
+                        crossterm::event::Event::Mouse(event) => match event.kind {
+                            MouseEventKind::Down(_)
+                            | MouseEventKind::ScrollUp
+                            | MouseEventKind::ScrollDown
+                            | MouseEventKind::Drag(_) => {
+                                self.state.mouse.events.push(event);
+                            }
+                            _ => (),
+                        },
                         _ => {}
                     }
                 }
                 Event::UpdateProviders { providers } => {
-                    self.meta.provider = providers;
+                    self.state.providers = providers;
                 }
                 Event::UpdateProvider { name, variables } => {
-                    self.meta.provider.variables.extend(
+                    self.state.providers.variables.extend(
                         variables
                             .into_iter()
                             .map(|(k, v)| (format!("{name}.{k}"), v)),
                     );
-                    // self.meta
-                    //     .provider
-                    //     .providers
-                    //     .entry(name)
-                    //     .or_insert(Provider {
-                    //         variables: Default::default(),
-                    //     })
-                    //     .update(variables);
-                    // self.meta.provider
-                    // self.meta.provider.providers.insert(name, provider);
                 }
                 Event::ImageLoaded { path, protocol } => {
-                    self.meta
-                        .provider
+                    self.state
+                        .providers
                         .images
-                        .insert(path, AccessBuf::new(Some(protocol)));
+                        .insert(path, AccessCache::new(Some(protocol)));
                 }
             }
-            self.meta.diagnostics.event_time = event_now.elapsed();
+            // self.meta.diagnostics.event_time = event_now.elapsed();
         }
         Ok(())
     }

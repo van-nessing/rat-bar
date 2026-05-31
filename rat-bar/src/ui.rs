@@ -1,11 +1,15 @@
-use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
+use ratatui::{
+    buffer::Buffer,
+    layout::{Layout, Rect},
+    widgets::{StatefulWidget, Widget},
+};
 use serde::Deserialize;
 
 use crate::{app::App, components::BarComponent};
 
 #[derive(Deserialize)]
 pub struct Ui {
-    pub component: BarComponent,
+    pub components: Vec<BarComponent>,
 }
 
 impl Widget for &mut App {
@@ -16,9 +20,15 @@ impl Widget for &mut App {
     // - https://docs.rs/ratatui/latest/ratatui/widgets/index.html
     // - https://github.com/ratatui/ratatui/tree/master/examples
     fn render(self, area: Rect, buf: &mut Buffer) {
-        self.ui
-            .component
-            .as_widget(&mut self.meta, &mut self.requests)
-            .render(area, buf);
+        let layout = area.layout_vec(&Layout::horizontal(
+            self.ui
+                .components
+                .iter()
+                .map(|component| component.constraint),
+        ));
+        for (component, area) in self.ui.components.iter_mut().zip(layout.into_iter()) {
+            component.render(area, buf, &mut self.state);
+        }
+        self.state.mouse.events.clear();
     }
 }

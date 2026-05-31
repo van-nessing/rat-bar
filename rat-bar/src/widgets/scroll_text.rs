@@ -57,7 +57,7 @@ impl ScrollTextState {
                     self.last_scroll = now;
                 }
             }
-            o if line.width() as u16 - o <= area.width => {
+            o if (line.width() as u16).saturating_sub(o) <= area.width => {
                 if elapsed > self.rest_duration {
                     self.offset = 0;
                     self.last_scroll = now;
