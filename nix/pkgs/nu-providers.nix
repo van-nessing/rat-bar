@@ -2,9 +2,11 @@
   lib,
   writers,
   playerctl,
+  nushell,
   root ? ./.,
 }:
-writers.writeNuBin "rat-bar-providers" {
+writers.makeScriptWriter ({
+  interpreter = "${lib.getExe nushell} --stdin";
   makeWrapperArgs = [
     "--prefix"
     "PATH"
@@ -13,4 +15,17 @@ writers.writeNuBin "rat-bar-providers" {
       playerctl
     ]}"
   ];
-} (root + /example-config/providers.nu)
+}) "/bin/ratbar-providers-nu" (root + /example-config/providers.nu)
+# writers.writeNuBin
+# "rat-bar-providers"
+# {
+#   makeWrapperArgs = [
+#     "--prefix"
+#     "PATH"
+#     ":"
+#     "${lib.makeBinPath [
+#       playerctl
+#     ]}"
+#   ];
+# }
+# (root + /example-config/providers.nu)

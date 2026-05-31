@@ -40,5 +40,12 @@ rec {
     type "Image" {
       inherit var width;
     };
+  interactable =
+    provider: inner:
+    type "Interactable" {
+      inherit provider inner;
+    };
+  on_click = on_click: prev: mod prev { inherit on_click; };
+  on_scroll = on_scroll: prev: mod prev { inherit on_scroll; };
   provider = t: type "Provider" t;
 }
