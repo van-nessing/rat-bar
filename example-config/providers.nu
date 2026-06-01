@@ -250,19 +250,21 @@ def "main niri-focus" []: [] {
     }
 }
 
-def "main pipewire" [] {
+def "main pipewire" [
+    interval: duration = 2sec # Interval at which to sync external volume changes
+] {
     lines
     | each { from json }
     | tee {
       job spawn {
         loop {
-            sleep 2sec;
             ^wpctl get-volume @DEFAULT_AUDIO_SINK@
             | parse -r 'Volume: (?<volume>\S*)(?: \[(?<muted>MUTED)\])?'
             | update muted { into bool --relaxed }
             | update volume { into float | $in * 100.0}
             | { update: $in }
             | job send 0;
+            sleep $interval;
         }
       };
     }

@@ -96,14 +96,19 @@ enum Event {
         position: MicroDuration,
     },
     Tick,
-    PlayerRequest(Request),
+    PlayerRequest(RequestKind),
     Error(eyre::Report),
 }
 
-enum Request {
+enum RequestKind {
     Next,
     Prev,
     Play,
+    Seek(f32),
+}
+pub struct Request {
+    length: MicroDuration,
+    kind: RequestKind,
 }
 
 #[derive(Deserialize, Type, Debug)]
@@ -114,8 +119,11 @@ struct Signal<'a> {
 }
 
 #[derive(Deserialize)]
-struct ButtonMessage<'a> {
-    name: &'a str,
+struct ButtonMessage {
+    next: Option<f32>,
+    prev: Option<f32>,
+    play: Option<f32>,
+    seek: Option<f32>,
 }
 
 #[derive(Deserialize, Debug, Type, Default)]
@@ -186,10 +194,23 @@ async fn listen_player(
             },
             async {
                 while let Ok(request) = requests.recv().await {
-                    let _ = match request {
-                        Request::Next => player_proxy.next().await,
-                        Request::Prev => player_proxy.previous().await,
-                        Request::Play => player_proxy.play_pause().await,
+                    let _ = match request.kind {
+                        RequestKind::Seek(difference) => {
+                            if let Some(length) = request.length.0 {
+                                let sign = if difference.signum() == 1.0 { 1 } else { -1 };
+                                let offset = Duration::from_secs_f32(
+                                    (length.as_secs_f32() * difference).abs(),
+                                )
+                                .as_micros();
+                                if let Ok(offset) = i64::try_from(offset) {
+                                    let _ = player_proxy.seek(offset * sign).await;
+                                }
+                            }
+                            Ok(())
+                        }
+                        RequestKind::Next => player_proxy.next().await,
+                        RequestKind::Prev => player_proxy.previous().await,
+                        RequestKind::Play => player_proxy.play_pause().await,
                     };
                 }
                 Ok(())
@@ -362,7 +383,13 @@ impl Provider for Media {
                             }
                             Event::PlayerRequest(request) => {
                                 if let Some((_, player)) = self.active_player_mut() {
-                                    player.requests.send(request).await?
+                                    player
+                                        .requests
+                                        .send(Request {
+                                            length: player.metadata.length,
+                                            kind: request,
+                                        })
+                                        .await?
                                 }
                             }
                             Event::Tick => (),
@@ -379,11 +406,18 @@ impl Provider for Media {
                         if let Ok(message) = serde_json::from_str::<ButtonMessage>(&buf)
                             .with_section(|| buf.clone().header("message"))
                         {
-                            match message.name {
-                                "prev" => tx.send(Event::PlayerRequest(Request::Prev)).await?,
-                                "next" => tx.send(Event::PlayerRequest(Request::Next)).await?,
-                                "play" => tx.send(Event::PlayerRequest(Request::Play)).await?,
-                                _ => {}
+                            if let Some(_) = message.next {
+                                tx.send(Event::PlayerRequest(RequestKind::Next)).await?;
+                            }
+                            if let Some(_) = message.prev {
+                                tx.send(Event::PlayerRequest(RequestKind::Prev)).await?;
+                            }
+                            if let Some(_) = message.play {
+                                tx.send(Event::PlayerRequest(RequestKind::Play)).await?;
+                            }
+                            if let Some(delta) = message.seek {
+                                tx.send(Event::PlayerRequest(RequestKind::Seek(delta / 100.0)))
+                                    .await?;
                             }
                         }
                     }

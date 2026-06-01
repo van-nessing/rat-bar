@@ -111,14 +111,7 @@ impl App {
                     .values_mut()
                     .for_each(|access| access.reset());
 
-                terminal.draw(|frame| {
-                    let [dbug, rest] = frame.area().layout(&Layout::horizontal(&[
-                        Constraint::Length(6),
-                        Constraint::Fill(1),
-                    ]));
-                    frame.render_widget(self.state.iteration.to_string(), dbug);
-                    frame.render_widget(&mut self, rest);
-                })?;
+                terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
 
                 // remove all image protocols from cache that weren't rendered this frame
                 self.state

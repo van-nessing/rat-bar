@@ -46,17 +46,13 @@ pub struct Metadata {
     // pub url: String,
 }
 
-#[derive(Deserialize, Default, Debug)]
+#[derive(Deserialize, Default, Debug, Clone, Copy)]
 #[serde(from = "i64")]
 pub struct MicroDuration(pub Option<Duration>);
 
 impl From<i64> for MicroDuration {
     fn from(value: i64) -> Self {
-        if value < 0 {
-            MicroDuration(None)
-        } else {
-            MicroDuration(Some(Duration::from_micros(value as u64)))
-        }
+        MicroDuration(u64::try_from(value).map(Duration::from_micros).ok())
     }
 }
 
