@@ -186,18 +186,7 @@ impl ProviderLayoutType {
                 .and_then(|var| var.as_f64())
                 .unwrap_or(0.0) as f32;
             let new_percentage = match direction {
-                Direction::Horizontal => {
-                    let click = position.x - area.x;
-                    click as f32 / area.width as f32
-                }
-                // 0
-                // 1
-                // 2
-                // 3
-                // 4
-                // 5
-                // 6
-                // 7
+                Direction::Horizontal => (position.x - area.x) as f32 * 100.0 / area.width as f32,
                 Direction::Vertical => {
                     (area.height - (position.y - area.y)) as f32 * 100.0 / area.height as f32
                 }
