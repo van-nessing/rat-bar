@@ -1,22 +1,12 @@
 use std::{
-    error::Error,
     path::PathBuf,
-    process::Stdio,
     sync::{Arc, atomic::AtomicBool},
-    time::Duration,
 };
 
 use clap::Parser;
-use color_eyre::eyre::eyre;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use futures_concurrency::future::Race;
-use kdl::KdlDocument;
 use miette::IntoDiagnostic;
-use serde::Deserialize;
-use tokio::{
-    fs::read,
-    io::{AsyncReadExt, AsyncWriteExt},
-};
 
 use crate::{app::App, config::Config, event::run_event_tasks, ui::Ui};
 

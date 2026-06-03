@@ -1,4 +1,4 @@
-use crate::{Provider, trunc};
+use crate::Provider;
 use std::{fs::read_to_string, time::Duration};
 
 pub struct Battery {

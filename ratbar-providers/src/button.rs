@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::Provider;
-use std::{collections::BTreeMap, time::Duration};
+use std::time::Duration;
 
 pub struct Button {
     i: f32,
@@ -23,7 +23,7 @@ pub struct Input {
 impl Provider for Button {
     type Args = ButtonArgs;
     type Fmt<'a> = ButtonFormat;
-    fn init(args: Self::Args) -> color_eyre::Result<Button> {
+    fn init(_args: Self::Args) -> color_eyre::Result<Button> {
         Ok(Button { i: 0.0 })
     }
     fn duration(&self) -> Option<Duration> {

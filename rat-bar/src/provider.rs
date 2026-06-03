@@ -1,37 +1,17 @@
-use std::{borrow::Cow, collections::HashMap, path::PathBuf, process::Stdio, time::Duration};
+use std::{collections::HashMap, path::PathBuf, process::Stdio, time::Duration};
 
-use color_eyre::{Section, SectionExt, eyre::Context};
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use futures_concurrency::future::Race;
 use itertools::Itertools;
-use lazy_static::lazy_static;
 use miette::{IntoDiagnostic, SourceOffset};
-use ratatui::{
-    layout::{Constraint, Direction, Flex, Layout, Position, Rect, Size},
-    style::{Color, Style},
-    text::{Line, Span},
-    widgets::{StatefulWidget, Widget},
-};
 use ratatui_image::protocol::Protocol;
-use regex::Captures;
-use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
-use serde_with::{FromInto, serde_as};
+use serde_json::Value;
 use tokio::{io::AsyncReadExt, sync::mpsc::Sender};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Child,
 };
 
-use crate::{
-    app::State,
-    event::{Event, Request},
-    widgets::{
-        bar_graph::{BarGraph, Marker},
-        percentage_bar::BlockPercentageBar,
-        scroll_text::{ScrollText, ScrollTextState},
-    },
-};
+use crate::event::Event;
 
 #[derive(Default)]
 pub struct ProviderState {

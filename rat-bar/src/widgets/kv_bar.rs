@@ -1,7 +1,7 @@
-use std::{borrow::Cow, iter, ops::Deref};
+use std::{borrow::Cow, iter};
 
 use ratatui::{
-    layout::{Constraint, Flex, Layout, Size, Spacing},
+    layout::{Constraint, Flex, Layout},
     text::{Line, Span},
     widgets::Widget,
 };

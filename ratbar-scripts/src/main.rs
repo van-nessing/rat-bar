@@ -1,4 +1,4 @@
-use std::{io::Read, os::fd::IntoRawFd};
+use std::io::Read;
 
 use clap::Parser;
 use color_eyre::{self as eyre, Section, SectionExt, eyre::Context};
@@ -9,7 +9,7 @@ use futures_concurrency::{
 };
 use serde::Deserialize;
 use smol::channel;
-use tempfile::{NamedTempFile, tempfile};
+use tempfile::NamedTempFile;
 
 #[derive(Parser)]
 pub enum Commands {
@@ -79,8 +79,8 @@ fn main() -> eyre::Result<()> {
                             let _ = child.kill();
                         }
                     }
-                    if let Some(code) = out {
-                        let mut err = eyre!("failed to launch rat-bar");
+                    if let Some(_code) = out {
+                        let err = eyre!("failed to launch rat-bar");
                         return Err(err.with_section(|| {
                             let mut buf = String::new();
                             let _ = temp_file.into_file().read_to_string(&mut buf);

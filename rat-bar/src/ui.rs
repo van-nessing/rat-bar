@@ -3,11 +3,10 @@ use ratatui::{
     layout::{Layout, Rect},
     widgets::{StatefulWidget, Widget},
 };
-use serde::Deserialize;
 
 use crate::{
     app::App,
-    layout::{BarElement, Element, ElementWidget},
+    layout::{BarElement, ElementWidget},
 };
 
 pub struct Ui {

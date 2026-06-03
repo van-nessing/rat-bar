@@ -1,17 +1,13 @@
-use color_eyre::{
-    Section, SectionExt,
-    eyre::{self, Context},
-};
+use color_eyre::eyre::Context;
 use futures_concurrency::future::Race;
 use image::load_from_memory;
 use miette::IntoDiagnostic;
 use ratatui::{crossterm::event::Event as CrosstermEvent, layout::Size};
-use ratatui_image::{FilterType, Resize, picker::Picker, protocol::Protocol};
+use ratatui_image::{Resize, picker::Picker, protocol::Protocol};
 use serde_json::Value;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::AtomicBool},
-    time::Duration,
 };
 use tokio::{
     io::AsyncWriteExt,
@@ -44,7 +40,7 @@ pub enum Request {
 }
 
 pub async fn run_event_tasks(
-    running: Arc<AtomicBool>,
+    _running: Arc<AtomicBool>,
     sender: Sender<Event>,
     requests: Receiver<Request>,
     providers: HashMap<String, crate::config::Provider>,
@@ -139,7 +135,7 @@ async fn crossterm_events(sender: Sender<Event>) -> miette::Result<()> {
     }
 }
 
-async fn signal_events(sender: Sender<Event>) -> miette::Result<()> {
+async fn signal_events(_sender: Sender<Event>) -> miette::Result<()> {
     let mut signals = [
         signal(SignalKind::terminate()).into_diagnostic()?,
         signal(SignalKind::hangup()).into_diagnostic()?,

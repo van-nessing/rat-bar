@@ -12,12 +12,12 @@ use serde::{Deserialize, Serialize};
 use smol::{
     Unblock,
     channel::{Receiver, Sender},
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    io::{AsyncBufReadExt, BufReader},
     stream::StreamExt,
 };
 use std::{
     collections::HashMap,
-    io::{BufRead, Read, stdin, stdout},
+    io::{BufRead, stdin, stdout},
     sync::Arc,
     time::{Duration, Instant},
 };

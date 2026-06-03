@@ -32,8 +32,8 @@ pub trait ElementWidget {
     fn on_click(
         &self,
         ProviderMessage { provider, message }: ProviderMessage,
-        area: Rect,
-        click_position: Position,
+        _area: Rect,
+        _click_position: Position,
         dir: f32,
         state: &mut State,
     ) {

@@ -3,12 +3,12 @@ use std::str::FromStr;
 use ratatui::layout::{Constraint as RatConstraint, Size};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::Widget as _;
-use ratatui::{layout::Direction, widgets::StatefulWidget};
+use ratatui::widgets::StatefulWidget;
 
 use crate::app::State;
 use crate::event::Request;
 use crate::layout::style::interpolate_string;
-use crate::layout::{Constraint, ElementWidget, ProviderMessage};
+use crate::layout::{ElementWidget, ProviderMessage};
 
 #[derive(knuffel::Decode)]
 pub struct Image {
@@ -25,7 +25,7 @@ pub struct Image {
 }
 
 impl ElementWidget for Image {
-    fn width(&self, state: &crate::app::State) -> RatConstraint {
+    fn width(&self, _state: &crate::app::State) -> RatConstraint {
         self.width.into()
     }
 

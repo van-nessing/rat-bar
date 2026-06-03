@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use color_eyre::eyre::eyre;
 use ratatui::layout::Constraint as RatConstraint;
 use ratatui::layout::Position;
 use ratatui::style::Color;
@@ -36,7 +35,7 @@ pub struct Bar {
 }
 
 impl ElementWidget for Bar {
-    fn width(&self, state: &crate::app::State) -> RatConstraint {
+    fn width(&self, _state: &crate::app::State) -> RatConstraint {
         self.width.into()
     }
 
@@ -49,7 +48,7 @@ impl ElementWidget for Bar {
         ProviderMessage { provider, message }: ProviderMessage,
         area: ratatui::prelude::Rect,
         click_position: Position,
-        dir: f32,
+        _dir: f32,
         state: &mut State,
     ) {
         let percentage = state

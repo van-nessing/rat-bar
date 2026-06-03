@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, convert::Infallible, ops::Deref, str::FromStr};
+use std::{borrow::Cow, convert::Infallible, ops::Deref, str::FromStr};
 
 use lazy_static::lazy_static;
 use ratatui::{

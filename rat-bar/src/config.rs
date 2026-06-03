@@ -64,7 +64,7 @@ fn load_all<T: DeserializeOwned>(dir: &Path, file: &str, path: Option<&Path>) ->
 }
 
 fn load_kdl<T: DeserializeOwned>(path: &Path) -> miette::Result<T> {
-    let input = std::fs::read_to_string(path).into_diagnostic()?;
+    let _input = std::fs::read_to_string(path).into_diagnostic()?;
     // Ok(kdl::de::from_str(&input)?)
     todo!()
 }

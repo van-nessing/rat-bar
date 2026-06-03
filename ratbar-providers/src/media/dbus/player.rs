@@ -25,7 +25,7 @@ use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use zbus::{
     proxy,
-    zvariant::{DeserializeDict, OwnedValue, SerializeDict, Signature, Type, Value, as_value},
+    zvariant::{OwnedValue, Signature, Type, Value, as_value},
 };
 
 #[derive(Debug, Deserialize, Default, Type)]

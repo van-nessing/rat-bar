@@ -1,8 +1,7 @@
 use std::borrow::Cow;
 
 use ratatui::{
-    layout::{Constraint, Layout, Rect, Size},
-    text::Line,
+    layout::{Constraint, Layout, Size},
     widgets::Widget,
 };
 
@@ -91,8 +90,8 @@ impl Widget for &LayoutVariant<'_> {
                 }
             }
             LayoutVariant::Element(element) => match element {
-                LayoutElement::Str(cow) => {}
-                LayoutElement::Val(cow) => todo!(),
+                LayoutElement::Str(_cow) => {}
+                LayoutElement::Val(_cow) => todo!(),
             },
         }
     }

@@ -28,7 +28,7 @@ pub struct Graph {
 }
 
 impl ElementWidget for Graph {
-    fn width(&self, state: &crate::app::State) -> RatConstraint {
+    fn width(&self, _state: &crate::app::State) -> RatConstraint {
         self.width.into()
     }
 
