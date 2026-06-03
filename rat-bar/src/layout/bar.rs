@@ -85,8 +85,8 @@ impl StatefulWidget for &mut Bar {
             .get(&self.var)
             .and_then(|var| var.as_f64())
             .unwrap_or(0.0) as f32;
-        let fg = interpolate_string(&self.fg, &state);
-        let bg = interpolate_string(&self.bg, &state);
+        let fg = interpolate_string(&self.fg, state);
+        let bg = interpolate_string(&self.bg, state);
 
         let fg = Color::from_str(&fg).unwrap_or(Color::White);
         let bg = Color::from_str(&bg).unwrap_or(Color::DarkGray);

@@ -71,7 +71,7 @@ fn load_kdl<T: DeserializeOwned>(path: &Path) -> miette::Result<T> {
 fn load_yaml<T: DeserializeOwned>(path: &Path) -> miette::Result<T> {
     let slice = std::fs::read(path).into_diagnostic()?;
     let deserializer = serde_yaml::Deserializer::from_slice(&slice);
-    Ok(serde_yaml::with::singleton_map_recursive::deserialize(deserializer).into_diagnostic()?)
+    serde_yaml::with::singleton_map_recursive::deserialize(deserializer).into_diagnostic()
 }
 #[serde_as]
 #[derive(Deserialize, Serialize)]

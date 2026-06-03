@@ -2,8 +2,8 @@ use std::str::FromStr;
 
 use ratatui::layout::{Constraint as RatConstraint, Size};
 use ratatui::style::{Color, Style};
-use ratatui::widgets::Widget as _;
 use ratatui::widgets::StatefulWidget;
+use ratatui::widgets::Widget as _;
 
 use crate::app::State;
 use crate::event::Request;
@@ -44,7 +44,7 @@ impl StatefulWidget for &mut Image {
         state: &mut Self::State,
     ) {
         if let Some(bg) = &self.bg {
-            let color = interpolate_string(&bg, state);
+            let color = interpolate_string(bg, state);
             if let Ok(color) = Color::from_str(&color) {
                 buf.set_style(area, Style::new().bg(color));
             }

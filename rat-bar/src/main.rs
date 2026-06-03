@@ -42,24 +42,14 @@ async fn main() -> miette::Result<()> {
     let (event_sender, event_receiver) = tokio::sync::mpsc::channel(32);
     let (request_sender, requests_receiver) = tokio::sync::mpsc::channel(32);
 
-    let running = Arc::new(AtomicBool::new(true));
-
-    let app = App::new(running.clone(), event_receiver, request_sender, ui)
-        .await
-        .unwrap();
-    let dispatcher = run_event_tasks(
-        running.clone(),
-        event_sender,
-        requests_receiver,
-        config.providers,
-    );
+    let app = App::new(event_receiver, request_sender, ui).await.unwrap();
+    let dispatcher = run_event_tasks(event_sender, requests_receiver, config.providers);
 
     let mut terminal = ratatui::init();
 
     crossterm::execute!(terminal.backend_mut(), EnableMouseCapture).into_diagnostic()?;
 
     let result = (app.run(&mut terminal), dispatcher).race().await;
-    running.store(false, std::sync::atomic::Ordering::Relaxed);
 
     crossterm::execute!(terminal.backend_mut(), DisableMouseCapture).into_diagnostic()?;
 

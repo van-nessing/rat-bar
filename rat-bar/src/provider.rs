@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf, process::Stdio, time::Duration};
 
 use futures_concurrency::future::Race;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, SourceOffset};
+use miette::{Diagnostic, IntoDiagnostic, SourceOffset};
 use ratatui_image::protocol::Protocol;
 use serde_json::Value;
 use tokio::{io::AsyncReadExt, sync::mpsc::Sender};
@@ -20,8 +20,16 @@ pub struct ProviderState {
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
-#[error("malformed json provided")]
+#[error("failed with stderr: `{out}`")]
+struct Stderr {
+    out: String,
+}
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("recieved malformed json from provider: `{provider}`")]
 struct SerdeError {
+    provider: String,
+    #[related]
+    related: Vec<miette::Report>,
     cause: serde_json::Error,
     #[source_code]
     input: String,
@@ -32,10 +40,17 @@ struct SerdeError {
 impl SerdeError {
     /// Takes the input and the `serde_json::Error` and returns a SerdeError
     /// that can be rendered nicely with miette.
-    pub fn from_serde_error(input: impl Into<String>, cause: serde_json::Error) -> Self {
+    pub fn from_serde_error(
+        input: impl Into<String>,
+        cause: serde_json::Error,
+        provider: String,
+        related: Vec<miette::Report>,
+    ) -> Self {
         let input = input.into();
         let location = SourceOffset::from_location(&input, cause.line(), cause.column());
         Self {
+            provider,
+            related,
             cause,
             input,
             location,
@@ -63,6 +78,15 @@ impl<T> AccessCache<T> {
     }
     pub fn accessed(&self) -> bool {
         self.accessed
+    }
+}
+
+impl ProviderState {
+    pub fn reset_image_access(&mut self) {
+        self.images.values_mut().for_each(|access| access.reset());
+    }
+    pub fn remove_unused_image(&mut self) {
+        self.images.retain(|_, access| access.accessed());
     }
 }
 
@@ -152,18 +176,23 @@ pub async fn provider_events(
                             Ok(var) => var,
                             Err(e) => {
                                 let mut err = String::new();
-                                tokio::time::timeout(
+
+                                let _ = tokio::time::timeout(
                                     Duration::from_secs(1),
                                     stderr.read_to_string(&mut err),
                                 )
                                 .await;
-                                Err(SerdeError::from_serde_error(&buf, e))?
-                                // let err = color_eyre::Result::<()>::Err(e.into())
-                                //     .suppress_backtrace(true)
-                                //     .with_section(|| provider.header("provider"))
-                                //     .with_section(|| buf.header("stdout"))
-                                //     .with_section(|| err.header("stderr"));
-                                // return err;
+                                let related = if !err.is_empty() {
+                                    vec![miette::Report::new(Stderr { out: err })]
+                                } else {
+                                    vec![]
+                                };
+                                Err(SerdeError::from_serde_error(
+                                    &buf,
+                                    e,
+                                    provider.clone(),
+                                    related,
+                                ))?
                             }
                         };
                         sender

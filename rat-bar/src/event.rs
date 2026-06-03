@@ -5,10 +5,7 @@ use miette::IntoDiagnostic;
 use ratatui::{crossterm::event::Event as CrosstermEvent, layout::Size};
 use ratatui_image::{Resize, picker::Picker, protocol::Protocol};
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-    sync::{Arc, atomic::AtomicBool},
-};
+use std::collections::HashMap;
 use tokio::{
     io::AsyncWriteExt,
     process::ChildStdin,
@@ -40,7 +37,6 @@ pub enum Request {
 }
 
 pub async fn run_event_tasks(
-    _running: Arc<AtomicBool>,
     sender: Sender<Event>,
     requests: Receiver<Request>,
     providers: HashMap<String, crate::config::Provider>,
