@@ -1,0 +1,62 @@
+clock {
+  block title="CLOCK"
+  layout 1 {
+    group "H" { 
+      text "${clock.day}"
+      text "${clock.time}"
+      text "${clock.date}"
+    }
+  }
+  layout 2 {
+    group "H" { 
+      group "V" {
+        text "DAY"
+        text "${clock.day}"
+      }
+      group "V" {
+        text "TIME"
+        text "${clock.time}"
+      }
+      group "V" {
+        text "DATE"
+        text "${clock.date}"
+      }
+    }
+  }
+}
+media {
+  block title="MEDIA"
+  layout 1 {
+    group "H" spacing=1 {
+      image "media.art" width=5 bg="darkgray"
+      group "V" width="3#" {
+        text "${media.title}"
+        text "$[ul](${media.album}) | $[ul](${media.artist})"
+      }
+      group "V" width="2#" {
+        group "H" {
+          group "H" width="8"{
+            text "⏮ " on-click="media.prev"
+            text "${media.button_symbol} " on-click="media.play"
+            text "⏭ " on-click="media.next"
+          }
+          text "${media.position}/${media.length}"
+        }
+        bar "H" var="media.progress" fg="red" bg="dark-gray"
+      }
+    }
+  }
+}
+pipewire {
+  block title="${pipewire.volume}"
+  layout 1 {
+    group "h" { 
+      text "${pipewire.volume}%"
+      bar "v" var="pipewire.volume" fg="gray" bg="dark-gray" on-click="pipewire.add_vol" on-scroll="pipewire.add_vol"
+    }
+  }
+}
+/-cpu {
+  block title="CPU"
+}
+

@@ -1,34 +1,28 @@
+use crossterm::event::{MouseEvent, MouseEventKind};
+use miette::IntoDiagnostic;
+use ratatui::{
+    DefaultTerminal,
+    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
+    layout::{Position, Rect},
+};
 use std::{
-    collections::HashMap,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
-
-use color_eyre::eyre::eyre;
-use crossterm::event::{EnableMouseCapture, MouseEvent, MouseEventKind};
-use ratatui::{
-    DefaultTerminal,
-    crossterm::event::{KeyCode, KeyEvent, KeyModifiers},
-    layout::{Constraint, Layout, Position, Rect},
-};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
-    components::{
-        diagnostics::DiagnosticsMeta,
-        provider::{AccessCache, ProviderState},
-    },
     event::{Event, Request},
+    provider::{AccessCache, ProviderState},
     ui::Ui,
 };
 
 // #[derive(Debug)]
 pub struct Meta {
     pub provider: ProviderState,
-    pub diagnostics: DiagnosticsMeta,
 }
 
 pub struct App {
@@ -96,7 +90,7 @@ impl App {
     }
 
     /// Run the application's main loop.
-    pub async fn run(mut self, terminal: &mut DefaultTerminal) -> color_eyre::Result<()> {
+    pub async fn run(mut self, terminal: &mut DefaultTerminal) -> miette::Result<()> {
         let refresh_rate = Duration::from_secs(1) / 60;
         let mut last_render = Instant::now() - refresh_rate;
 
@@ -111,7 +105,9 @@ impl App {
                     .values_mut()
                     .for_each(|access| access.reset());
 
-                terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
+                terminal
+                    .draw(|frame| frame.render_widget(&mut self, frame.area()))
+                    .into_diagnostic()?;
 
                 // remove all image protocols from cache that weren't rendered this frame
                 self.state
@@ -124,24 +120,19 @@ impl App {
                 // self.meta.diagnostics.render_time = render_now.elapsed();
             }
 
-            // self.meta.diagnostics.total_ticks += 1;
-            // self.meta.diagnostics.queued_events = self.events.len() as u64;
-
             let event = self
                 .events
                 .recv()
                 .await
-                .ok_or_else(|| eyre!("channel closed"))?;
+                .ok_or_else(|| miette::miette!("channel closed"))?;
 
-            let event_now = Instant::now();
             match event {
                 Event::Crossterm(event) => {
-                    let event_now = Instant::now();
                     match event {
                         crossterm::event::Event::Key(key_event)
                             if key_event.kind == crossterm::event::KeyEventKind::Press =>
                         {
-                            self.handle_key_events(key_event)?;
+                            self.handle_key_events(key_event);
                             // self.meta.diagnostics.event_times.crossterm = event_now.elapsed();
                         }
                         crossterm::event::Event::Mouse(event) => match event.kind {
@@ -179,7 +170,7 @@ impl App {
     }
 
     /// Handles the key events and updates the state of [`App`].
-    pub fn handle_key_events(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
+    pub fn handle_key_events(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Esc | KeyCode::Char('q') => self.quit(),
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
@@ -187,7 +178,6 @@ impl App {
             }
             _ => {}
         }
-        Ok(())
     }
 
     /// Set running to false to quit the application.

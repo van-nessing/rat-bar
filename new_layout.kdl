@@ -1,0 +1,193 @@
+Widget {
+  constraint Fill=1
+  block title="FOCUS"
+  layout {
+    T Text="${niri.app_id} | $[ul](${niri.title})"
+    VGroup center=#false {
+      elements Text="${niri.app_id}"
+      elements Text="${niri.title}"
+    }
+  }
+}
+
+// block title="FOCUS" {
+//   layout {
+//     Text "${niri.app_id} | $[ul](${niri.title})"
+//     VGroup center=#false {
+//       Text "${niri.app_id}"
+//       Text "${niri.title}"
+//     }
+//   }
+// }
+
+Widget {
+  block title="VISUALIZER"
+  constraint Length=27
+  layout {
+    Graph fg="Gray" fill=#true marker="Braille" var="visualizer.bins"
+  }
+}
+
+Widget {
+  block title="CLOCK"
+  constraint Length=30
+  layout {
+    HGroup {
+      // elements Text="${clock.day}"
+      Bar bg="DarkGray" fg="Gray" direction="Vertical" var="pipewire.volume"
+      Text "a"
+      // elements Text="${clock.time}"
+      // elements Text="${clock.date}"
+      // Graph fg="Gray" fill=#true marker="Braille" var="visualizer.bins"
+      // Bar fg
+    }
+    // HGroup {
+    //   VGroup {
+    //     elements Text="DAY"
+    //     elements Text="${clock.day}"
+    //   }
+    //   VGroup {
+    //     elements Text="TIME"
+    //     elements Text="${clock.time}"
+    //   }
+    //   VGroup {
+    //     elements Text="DATE"
+    //     elements Text="${clock.date}"
+    //   }
+    // }
+  }
+}
+
+// block title="NOW PLAYING" {
+//   constraint length=60
+//   layout {
+//     HGroup {
+//       Image var="now-playing.art" width=2
+//       HGroup width_percentage=70 {
+//         Text "$[ul](${now-playing.title}) | $[ul](${now-playing.artist})"
+//       }
+//       Text "${now-playing.buttons}"
+//       Bar bg="DarkGray" direction="Horizontal" fg="Red" var="progress" width_percentage=30
+//       Text "${now-playing.position}/${now-playing.length}"
+//     }
+//     HGroup {
+//       Image var="art" width=5
+//       VGroup width_percentage=60 {
+//         Text "${now-playing.title}"
+//         Text "$[ul](${now-playing.album}) | $[ul](${now-playing.artist})"
+//       }
+//       VGroup width_percentage=40 {
+//         HGroup {
+//           HGroup width=8 {
+//             Interactable provider="now-playing" on_click="prev" {
+//               Text "⏩"
+//             }
+//             Interactable provider="now-playing" on_click="play" {
+//               Text "${now-playing.button_symbol}"
+//             }
+//             Interactable provider="now-playing" on_click="next" {
+//               Text "⏩"
+//             }
+//           }
+//           Text "${now-playing.position}/${now-playing.length}"
+//         }
+//       }
+//     }
+//   }
+// }
+
+// block title="CPU" {
+//   constraint length=27
+//   layout {
+//     HGroup {
+//       Text "${cpu.load}%"
+//       Bar bg="DarkGray" direction="Horizontal" fg="Gray" var="load"
+//     }
+//     HGroup {
+//       VGroup {
+//         Text "LOAD"
+//       }
+//       VGroup {
+//         Text "FREQ"
+//         Text "${cpu.freq}GHZ"
+//       }
+//       VGroup {
+//         Text "TEMP"
+//         Text "${cpu.temp}°C"
+//       }
+//       Graph fg="Blue" fill=#true marker="Octant" var="cpu.acc"
+//     }
+//   }
+// }
+
+// block title="MEM" {
+//   constraint length=20
+//   layout {
+//     HGroup {
+//       Text "${mem.used}GB/${mem.total}GB"
+//       Bar bg="DarkGray" direction="Horizontal" fg="Yellow" var="mem.percent"
+//     }
+//     HGroup {
+//       VGroup {
+//         Text "FREE: ${mem.available}GB"
+//         Text "USED: ${mem.used}GB"
+//       }
+//       Bar bg="DarkGray" direction="Vertical" fg="Yellow" var="mem.percent"
+//     }
+//   }
+// }
+
+// block title="NET" {
+//   constraint length=16
+//   layout {
+//     HGroup {
+//       Text "RX: ${net.recv}"
+//       Text "TX: ${net.sent}"
+//     }
+//     VGroup center=#false {
+//       Text "RX: ${net.recv}MB/S"
+//       Text "TX: ${net.sent}MB/S"
+//     }
+//   }
+// }
+
+// block title="WIFI" {
+//   constraint length=16
+//   layout {
+//     Text "${wifi.ssid} ${wifi.symbol}"
+//     VGroup {
+//       HGroup {
+//         Text "${wifi.ssid}"
+//         Text "${wifi.symbol}"
+//       }
+//     }
+//   }
+// }
+
+// block title="BAT" {
+//   constraint length=16
+//   layout {
+//     Text "${battery.charge}%"
+//     VGroup {
+//       HGroup {
+//         Text "${battery.charge}%"
+//         Bar bg="DarkGray" direction="Horizontal" fg="Gray" var="battery.charge"
+//       }
+//       Text "${battery.status}"
+//     }
+//   }
+// }
+
+// block title="BAT" {
+//   constraint length=16
+//   layout {
+//     VGroup {
+//       Interactable provider="pipewire" on_click="add_vol" on_scroll="add_vol" {
+//         Text "$[rv,bo](b: ${pipewire.muted})"
+//       }
+//       Interactable provider="pipewire" on_click="add_vol" on_scroll="add_vol" {
+//         Bar bg="DarkGray" fg="Gray" direction="Vertical" var="pipewire.volume"
+//       }
+//     }
+//   }
+// }

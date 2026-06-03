@@ -8,7 +8,8 @@ use ratatui::{
         canvas::{Canvas, Line},
     },
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use strum::EnumString;
 
 pub struct BarGraph<'a> {
     pub percentages: &'a [f32],
@@ -18,7 +19,7 @@ pub struct BarGraph<'a> {
     pub fill: bool,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, EnumString)]
 pub enum Marker {
     #[default]
     Braille,

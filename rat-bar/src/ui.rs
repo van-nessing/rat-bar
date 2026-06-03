@@ -5,11 +5,13 @@ use ratatui::{
 };
 use serde::Deserialize;
 
-use crate::{app::App, components::BarComponent};
+use crate::{
+    app::App,
+    layout::{BarElement, Element, ElementWidget},
+};
 
-#[derive(Deserialize)]
 pub struct Ui {
-    pub components: Vec<BarComponent>,
+    pub components: Vec<BarElement>,
 }
 
 impl Widget for &mut App {
@@ -21,10 +23,7 @@ impl Widget for &mut App {
     // - https://github.com/ratatui/ratatui/tree/master/examples
     fn render(self, area: Rect, buf: &mut Buffer) {
         let layout = area.layout_vec(&Layout::horizontal(
-            self.ui
-                .components
-                .iter()
-                .map(|component| component.constraint),
+            self.ui.components.iter().map(|component| component.width),
         ));
         for (component, area) in self.ui.components.iter_mut().zip(layout.into_iter()) {
             component.render(area, buf, &mut self.state);

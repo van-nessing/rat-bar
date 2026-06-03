@@ -71,7 +71,7 @@ fn default_flex() -> Flex {
 }
 
 #[serde_as]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub enum ProviderLayoutType {
     Interactable {
         inner: Box<ProviderLayoutType>,
@@ -130,7 +130,7 @@ pub enum InteractKind {
     Value { var: String },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Text {
     string: String,
     state: ScrollTextState,
@@ -142,6 +142,11 @@ impl From<String> for Text {
             string,
             state: Default::default(),
         }
+    }
+}
+impl From<Text> for String {
+    fn from(value: Text) -> Self {
+        value.string
     }
 }
 #[derive(Serialize)]

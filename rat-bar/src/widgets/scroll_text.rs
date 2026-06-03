@@ -11,7 +11,7 @@ pub struct ScrollText<'a> {
     pub line: Line<'a>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ScrollTextState {
     offset: u16,
     scroll_interval: Duration,

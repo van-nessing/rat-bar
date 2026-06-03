@@ -1,0 +1,20 @@
+BarComponent {
+    constraint Fill=1
+    block title="Gooby"
+    layout {
+        HGroup {
+            elements Text="a"
+            elements Text="a"
+            elements Text="a"
+        }
+    }
+
+	    // Image width=1 var="awaw"
+	// }
+}
+// BarComponent {
+// 	constraint Fill=1
+// }
+// BarComponent {
+// 	constraint Fill=1
+// }

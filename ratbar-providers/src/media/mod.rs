@@ -35,17 +35,14 @@ pub mod dbus;
 
 #[derive(Debug)]
 pub struct Media {
+    args: MediaArgs,
     rx: Receiver<Event>,
     tx: Sender<Event>,
-    duration: Duration,
-    prefer: PlaybackStatus,
-    priority: Vec<String>,
     players: HashMap<Arc<OwnedBusName>, Player>,
 }
 
 #[derive(Debug)]
 struct Player {
-    // listener: Task<eyre::Result<()>>,
     quit: Sender<()>,
     requests: Sender<Request>,
     metadata: Metadata,
@@ -55,11 +52,17 @@ struct Player {
     status: PlaybackStatus,
 }
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Debug)]
 pub struct MediaArgs {
     /// Amount of time between writing to stdout
     #[arg(value_parser = humantime::parse_duration)]
     duration: Duration,
+    #[arg(long, default_value_t = '⏵')]
+    playing_symbol: char,
+    #[arg(long, default_value_t = '⏸')]
+    pause_symbol: char,
+    #[arg(long, default_value_t = '⏹')]
+    stop_symbol: char,
     /// Status to consider a player valid for selection
     priority: PlaybackStatus,
     /// List of players to choose in order of preference
@@ -75,8 +78,7 @@ pub struct MediaFormat<'a> {
     album: String,
     artist: String,
     art: &'a str,
-    buttons: String,
-    button_symbol: &'a str,
+    button_symbol: String,
 }
 
 enum Event {
@@ -118,7 +120,7 @@ struct Signal<'a> {
     _f3: Vec<&'a str>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ButtonMessage {
     next: Option<f32>,
     prev: Option<f32>,
@@ -147,8 +149,7 @@ impl Default for MediaFormat<'_> {
             title: String::new(),
             album: String::new(),
             artist: String::new(),
-            buttons: String::from("⏵⏵ ██ ⏴⏴"),
-            button_symbol: "⏵ ",
+            button_symbol: String::from("⏵ "),
             art: "",
         }
     }
@@ -321,12 +322,10 @@ impl Provider for Media {
         smol::spawn(listen_names(conn.clone(), tx.clone())).detach();
 
         Ok(Media {
+            args,
             rx,
             tx,
             players,
-            duration: args.duration,
-            priority: args.players,
-            prefer: PlaybackStatus::Paused,
         })
     }
     fn run(mut self) -> eyre::Result<()> {
@@ -463,43 +462,65 @@ impl Provider for Media {
                     .replace(")", r"\)")
                     .replace("(", r"\("),
                 art: player.metadata.art.strip_prefix("file://").unwrap_or(""),
-                button_symbol: player.status.button(),
-                buttons: format!("⏵⏵ {} ⏴⏴", player.status.button()),
+                button_symbol: self.button(player).to_string(),
             })
         } else {
-            Ok(MediaFormat::default())
+            Ok(MediaFormat::init(self.args.stop_symbol))
         }
     }
     fn update(&mut self) -> eyre::Result<()> {
         unreachable!()
     }
     fn duration(&self) -> Option<std::time::Duration> {
-        Some(self.duration)
+        Some(self.args.duration)
+    }
+}
+impl MediaFormat<'_> {
+    pub fn init(stop_symbol: char) -> Self {
+        Self {
+            length: "xx:xx".into(),
+            position: "xx:xx".into(),
+            progress: 0.0,
+            title: String::new(),
+            album: String::new(),
+            artist: String::new(),
+            button_symbol: String::from(stop_symbol),
+            art: "",
+        }
     }
 }
 
 impl Media {
+    fn button(&self, active_player: &Player) -> char {
+        match active_player.status {
+            PlaybackStatus::Playing => self.args.playing_symbol,
+            PlaybackStatus::Paused => self.args.pause_symbol,
+            PlaybackStatus::Stopped => self.args.stop_symbol,
+        }
+    }
     fn active_player(&self) -> Option<(&Arc<OwnedBusName>, &Player)> {
         self.players
             .iter()
             .sorted_by_key(|(bus, _)| {
-                self.priority
+                self.args
+                    .players
                     .iter()
                     .position(|prio| bus.contains(prio))
                     .unwrap_or(usize::MAX)
             })
-            .find(|(_, player)| player.status <= self.prefer)
+            .find(|(_, player)| player.status <= self.args.priority)
     }
     fn active_player_mut(&mut self) -> Option<(&Arc<OwnedBusName>, &mut Player)> {
         self.players
             .iter_mut()
             .sorted_by_key(|(bus, _)| {
-                self.priority
+                self.args
+                    .players
                     .iter()
                     .position(|prio| bus.contains(prio))
                     .unwrap_or(usize::MAX)
             })
-            .find(|(_, player)| player.status <= self.prefer)
+            .find(|(_, player)| player.status <= self.args.priority)
     }
 }
 

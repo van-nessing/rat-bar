@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Flex, Layout, Margin, Position, Spacing},
     widgets::{Block, StatefulWidget, Widget},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
 pub mod diagnostics;
 pub mod provider;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct BarComponent {
     #[serde(default)]
     pub constraint: Constraint,
@@ -24,7 +24,7 @@ pub struct BarComponent {
     pub layout: Vec<ProviderLayoutType>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ConfigBlock {
     title: String,
 }
@@ -57,7 +57,7 @@ impl<'a> StatefulWidget for &'a mut BarComponent {
         let layout = if let Some(layout) = layout.get_mut(area.height as usize - 1) {
             layout
         } else {
-            layout.last_mut().unwrap()
+            layout.last_mut().expect("layout should not be empty")
         };
         layout.render(area, buf, state);
     }

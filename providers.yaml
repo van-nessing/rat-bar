@@ -23,17 +23,17 @@ mem:
   - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
   - mem
   - 1sec
-net:
-  command:
-  - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
-  - net
-  - 1sec
-  - "enp42s0"
+# net:
+#   command:
+#   - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
+#   - net
+#   - 1sec
+#   - "enp42s0"
 # niri:
 #   command:
 #   - /nix/store/adzvnws4b7kyxj5c7qrd8cqa9g2rfhxg-ratbar-providers-rs-0.2.0/bin/ratbar-providers-rs
 #   - niri
-now-playing:
+media:
   command:
   - /home/vanessa/Development/ratshell/rat-bar/target/debug/ratbar-providers-rs
   - media

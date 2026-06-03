@@ -4,6 +4,7 @@ use color_eyre::{
 };
 use futures_concurrency::future::Race;
 use image::load_from_memory;
+use miette::IntoDiagnostic;
 use ratatui::{crossterm::event::Event as CrosstermEvent, layout::Size};
 use ratatui_image::{FilterType, Resize, picker::Picker, protocol::Protocol};
 use serde_json::Value;
@@ -20,7 +21,7 @@ use tokio::{
 };
 use tokio_stream::StreamExt;
 
-use crate::components::provider::{ProviderState, init_providers, provider_events};
+use crate::provider::{ProviderState, init_providers, provider_events};
 
 pub enum Event {
     Crossterm(CrosstermEvent),
@@ -47,8 +48,8 @@ pub async fn run_event_tasks(
     sender: Sender<Event>,
     requests: Receiver<Request>,
     providers: HashMap<String, crate::config::Provider>,
-) -> color_eyre::Result<()> {
-    let picker = Picker::from_query_stdio()?;
+) -> miette::Result<()> {
+    let picker = Picker::from_query_stdio().into_diagnostic()?;
     let mut providers = init_providers(providers).await?;
     let providers_input = providers
         .iter_mut()
@@ -65,12 +66,20 @@ pub async fn run_event_tasks(
         .await
 }
 
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+enum RequestError {
+    #[error(
+        "attempted to send message to missing provider\nprovider: `{provider}`\nmessage: `{message}`"
+    )]
+    MissingProvider { provider: String, message: String },
+}
+
 async fn handle_requests(
     sender: Sender<Event>,
     mut requests: Receiver<Request>,
     mut providers: HashMap<String, ChildStdin>,
     picker: Picker,
-) -> color_eyre::Result<()> {
+) -> miette::Result<()> {
     while let Some(request) = requests.recv().await {
         let picker = picker.clone();
         let sender = sender.clone();
@@ -97,44 +106,48 @@ async fn handle_requests(
                 });
             }
             Request::MessageProvider { provider, message } => {
-                let stdin = providers
-                    .get_mut(&provider)
-                    .ok_or_else(|| {
-                        eyre::eyre!("attempted to send message to non existing provider")
-                    })
-                    .with_section(|| provider.header("provider"))
-                    .with_section(|| message.clone().header("message"))?;
+                let stdin =
+                    providers
+                        .get_mut(&provider)
+                        .ok_or_else(|| RequestError::MissingProvider {
+                            provider,
+                            message: message.clone(),
+                        })?;
 
-                stdin.write_all(message.as_bytes()).await?;
-                stdin.write_all(b"\n").await?;
-                stdin.flush().await?;
+                stdin
+                    .write_all(message.as_bytes())
+                    .await
+                    .into_diagnostic()?;
+                stdin.write_all(b"\n").await.into_diagnostic()?;
+                stdin.flush().await.into_diagnostic()?;
             }
         }
     }
     Ok(())
 }
 
-async fn crossterm_events(sender: Sender<Event>) -> color_eyre::Result<()> {
+async fn crossterm_events(sender: Sender<Event>) -> miette::Result<()> {
     let mut crossterm_events = crossterm::event::EventStream::new();
     loop {
         let crossterm_event = crossterm_events.next();
         if let Some(Ok(event)) = crossterm_event.await {
-            sender.send(Event::Crossterm(event)).await?;
+            sender
+                .send(Event::Crossterm(event))
+                .await
+                .into_diagnostic()?;
         }
     }
 }
 
-async fn signal_events(sender: Sender<Event>) -> color_eyre::Result<()> {
+async fn signal_events(sender: Sender<Event>) -> miette::Result<()> {
     let mut signals = [
-        signal(SignalKind::terminate())?,
-        signal(SignalKind::hangup())?,
-        signal(SignalKind::quit())?,
-        signal(SignalKind::interrupt())?,
-        signal(SignalKind::quit())?,
+        signal(SignalKind::terminate()).into_diagnostic()?,
+        signal(SignalKind::hangup()).into_diagnostic()?,
+        signal(SignalKind::quit()).into_diagnostic()?,
+        signal(SignalKind::interrupt()).into_diagnostic()?,
+        signal(SignalKind::quit()).into_diagnostic()?,
     ];
     let signals = signals.iter_mut().map(Signal::recv).collect::<Vec<_>>();
-    signals
-        .race()
-        .await
-        .ok_or_else(|| color_eyre::eyre::eyre!("signal error?"))
+    signals.race().await;
+    Ok(())
 }
