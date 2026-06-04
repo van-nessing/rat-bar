@@ -17,7 +17,7 @@ pub struct Group {
     flex: Flex,
     #[knuffel(property, default = true)]
     center: bool,
-    #[knuffel(property, default = 0)]
+    #[knuffel(property, default = 1)]
     spacing: u16,
     #[knuffel(children)]
     elements: Vec<Element>,

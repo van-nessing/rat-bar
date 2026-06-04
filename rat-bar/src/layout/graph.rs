@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use ratatui::prelude::Widget;
-use ratatui::style::Color;
+use ratatui::style::{Color, Style};
 use ratatui::{layout::Constraint as RatConstraint, widgets::StatefulWidget};
 
 use crate::app::State;
@@ -21,6 +21,8 @@ pub struct Graph {
     var: String,
     #[knuffel(property)]
     fg: String,
+    #[knuffel(property)]
+    bg: Option<String>,
     #[knuffel(property, str)]
     on_click: Option<ProviderMessage>,
     #[knuffel(property, str)]
@@ -46,6 +48,9 @@ impl StatefulWidget for &mut Graph {
         buf: &mut ratatui::prelude::Buffer,
         state: &mut Self::State,
     ) {
+        if let Some(color) = self.bg.as_ref().and_then(|bg| Color::from_str(bg).ok()) {
+            buf.set_style(area, Style::new().bg(color));
+        }
         if let Some(data) = state
             .providers
             .variables

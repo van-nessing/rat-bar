@@ -6,8 +6,8 @@ use knuffel::errors::DecodeError;
 use knuffel::traits::ErrorSpan;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Stylize};
-use ratatui::widgets::Widget;
 use ratatui::widgets::{Block as RatBlock, Borders as RatBorders};
+use ratatui::widgets::{Padding, Widget};
 use ratatui::{layout::Constraint as RatConstraint, widgets::StatefulWidget};
 use serde_json::json;
 
@@ -113,6 +113,8 @@ pub struct Layout {
 
 #[derive(knuffel::Decode)]
 pub struct Block {
+    #[knuffel(property, default = Some(1))]
+    padding: Option<u16>,
     #[knuffel(property)]
     title: Option<String>,
     #[knuffel(property)]
@@ -259,6 +261,9 @@ impl StatefulWidget for &mut BarElement {
                 rat_block = rat_block.borders(borders.into());
             } else {
                 rat_block = rat_block.borders(RatBorders::all());
+            }
+            if let Some(padding) = block.padding {
+                rat_block = rat_block.padding(Padding::horizontal(padding))
             }
 
             (&rat_block).render(area, buf);

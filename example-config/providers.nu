@@ -252,6 +252,8 @@ def "main niri-focus" []: [] {
 
 def "main pipewire" [
     interval: duration = 2sec # Interval at which to sync external volume changes
+    --volume_icons: list<string>
+
 ] {
     lines
     | each { from json }
@@ -290,7 +292,7 @@ def "main pipewire" [
   
         {out: $state, next: $state}
     }
-    | each { update muted { if $in {"mut"} else {"matl"}} | to json -r | print -r }
+    | each {  update volume {into int} | to json -r | print -r }
 }
 
 # Various providers that periodically output variables as json

@@ -1,62 +1,168 @@
-clock {
+// clock {
+//   block title="CLOCK"
+//   layout 1 {
+//     group "H" { 
+//       text "${clock.day}"
+//       text "${clock.time}"
+//       text "${clock.date}"
+//     }
+//   }
+//   layout 2 {
+//     group "H" { 
+//       group "V" {
+//         text "DAY"
+//         text "${clock.day}"
+//       }
+//       group "V" {
+//         text "TIME"
+//         text "${clock.time}"
+//       }
+//       group "V" {
+//         text "DATE"
+//         text "${clock.date}"
+//       }
+//     }
+//   }
+// }
+// media {
+//   block title="MEDIA"
+//   layout 1 {
+//     group "H" spacing=1 {
+//       image "media.art" width=5 bg="darkgray"
+//       group "V" width="3#" {
+//         text "${media.title}"
+//         text "$[ul](${media.album}) | $[ul](${media.artist})"
+//       }
+//       group "V" width="2#" {
+//         group "H" {
+//           group "H" width="8"{
+//             text "⏮ " on-click="media.prev"
+//             text "${media.button_symbol} " on-click="media.play"
+//             text "⏭ " on-click="media.next"
+//           }
+//           text "${media.position}/${media.length}"
+//         }
+//         bar "H" var="media.progress" fg="red" bg="dark-gray"
+//       }
+//     }
+//   }
+// }
+// pipewire {
+//   block title="${pipewire.volume}"
+//   layout 1 {
+//     group "h" { 
+//       text "${pipewire.volume}%"
+//       bar "v" var="pipewire.volume" fg="gray" bg="dark-gray" on-click="pipewire.add_vol" on-scroll="pipewire.add_vol"
+//     }
+//   }
+// }
+// /-cpu {
+//   block title="CPU"
+// }
+
+layout {
+  block title="VISUALIZER"
+  layout {
+    graph "visualizer.bins" fg="gray" fill=false marker="Braille"
+  }
+}
+layout {
   block title="CLOCK"
-  layout 1 {
-    group "H" { 
+  layout {
+    group "h" {
       text "${clock.day}"
       text "${clock.time}"
       text "${clock.date}"
     }
   }
-  layout 2 {
-    group "H" { 
-      group "V" {
+  layout {
+    group "h" {
+      group "v" {
         text "DAY"
         text "${clock.day}"
       }
-      group "V" {
+      group "v" {
         text "TIME"
         text "${clock.time}"
       }
-      group "V" {
+      group "v" {
         text "DATE"
         text "${clock.date}"
       }
     }
   }
 }
-media {
-  block title="MEDIA"
-  layout 1 {
-    group "H" spacing=1 {
-      image "media.art" width=5 bg="darkgray"
-      group "V" width="3#" {
+layout {
+  block title="CLOCK"
+  layout {
+    group "h" {
+      image "media.art" width=5
+      group "v" width="3#" {
         text "${media.title}"
         text "$[ul](${media.album}) | $[ul](${media.artist})"
       }
-      group "V" width="2#" {
-        group "H" {
-          group "H" width="8"{
+      group "v" width="2#" {
+        group "h" {
+          group "h" {
             text "⏮ " on-click="media.prev"
             text "${media.button_symbol} " on-click="media.play"
             text "⏭ " on-click="media.next"
           }
           text "${media.position}/${media.length}"
         }
-        bar "H" var="media.progress" fg="red" bg="dark-gray"
+        bar "horizontal" bg="dark-gray" fg="red" var="media.progress"
       }
     }
   }
 }
-pipewire {
-  block title="${pipewire.volume}"
-  layout 1 {
-    group "h" { 
-      text "${pipewire.volume}%"
-      bar "v" var="pipewire.volume" fg="gray" bg="dark-gray" on-click="pipewire.add_vol" on-scroll="pipewire.add_vol"
+layout {
+  block title="CPU"
+  layout {
+    group "h" {
+      group "v" {
+        text "LOAD"
+        text "${cpu.load}%"
+      }
+      group "v" {
+        text "FREQ"
+        text "${cpu.freq}GHZ"
+      }
+      graph "cpu.acc" fg="blue" fill=true marker="Octant"
     }
   }
 }
-/-cpu {
-  block title="CPU"
+layout {
+  block title="MEM"
+  layout {
+    group "h" {
+      group "v" {
+        text "FREE"
+        text "${mem.free}GB"
+      }
+      group "v" {
+        text "USED"
+        text "${mem.used}GB"
+      }
+      group "v" {
+        text "TOTAL"
+        text "${mem.total}GB"
+      }
+      bar "v" bg="dark-gray" fg="yellow" var="mem.percent"
+    }
+  }
 }
-
+layout {
+  block title="NET"
+  layout {
+    group "h" {
+      text "RX: ${net.recv}"
+      text "TX: ${net.sent}"
+    }
+  }
+  layout {
+    group "v" center=false {
+      text "RX: ${net.recv}MB/S"
+      text "TX: ${net.sent}MB/S"
+    }
+  }
+}

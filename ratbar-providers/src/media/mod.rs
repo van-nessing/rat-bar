@@ -305,7 +305,7 @@ impl Provider for Media {
     type Args = MediaArgs;
     type Fmt<'a> = MediaFormat<'a>;
 
-    fn init(args: Self::Args) -> eyre::Result<Self> {
+    fn init(mut args: Self::Args) -> eyre::Result<Self> {
         let (tx, rx) = smol::channel::unbounded();
         let conn = Connection::session()?;
         let conn = Arc::new(conn.into_inner());
@@ -321,6 +321,9 @@ impl Provider for Media {
         smol::spawn(ticker(tx.clone(), args.duration)).detach();
         smol::spawn(listen_names(conn.clone(), tx.clone())).detach();
 
+        args.players
+            .iter_mut()
+            .for_each(|player| *player = player.to_lowercase());
         Ok(Media {
             args,
             rx,
@@ -501,11 +504,13 @@ impl Media {
     fn active_player(&self) -> Option<(&Arc<OwnedBusName>, &Player)> {
         self.players
             .iter()
-            .sorted_by_key(|(bus, _)| {
+            .sorted_by_key(|(bus, player)| {
                 self.args
                     .players
                     .iter()
-                    .position(|prio| bus.contains(prio))
+                    .position(|prio| {
+                        bus.contains(prio) | player.identity.to_lowercase().contains(prio)
+                    })
                     .unwrap_or(usize::MAX)
             })
             .find(|(_, player)| player.status <= self.args.priority)
@@ -513,11 +518,13 @@ impl Media {
     fn active_player_mut(&mut self) -> Option<(&Arc<OwnedBusName>, &mut Player)> {
         self.players
             .iter_mut()
-            .sorted_by_key(|(bus, _)| {
+            .sorted_by_key(|(bus, player)| {
                 self.args
                     .players
                     .iter()
-                    .position(|prio| bus.contains(prio))
+                    .position(|prio| {
+                        bus.contains(prio) | player.identity.to_lowercase().contains(prio)
+                    })
                     .unwrap_or(usize::MAX)
             })
             .find(|(_, player)| player.status <= self.args.priority)

@@ -7,20 +7,21 @@
 }:
 let
   inherit (self.lib)
-    type
-    width
-    no-center
+    kdlNodeToString
+    bar-element
+    block
+    layout
+    group
     text
-    vgroup
-    hgroup
     bar
     graph
     image
-    provider
     ;
   cfg = config.programs.rat-bar;
   yamlFormat = pkgs.formats.yaml { };
-  layout = yamlFormat.generate "layout.yaml" cfg.layout;
+  kdlFormat =
+    file: nodes: pkgs.writeText file (lib.strings.concatMapStringsSep "\n" (kdlNodeToString 0) nodes);
+  layoutCfg = kdlFormat "layout.kdl" (cfg.layout);
   providers = yamlFormat.generate "providers.yaml" cfg.providers;
 in
 {
@@ -46,161 +47,154 @@ in
     layout = lib.mkOption {
       description = "Defines the bar layout.";
       default = [
-        {
-          block.title = "VISUALIZER";
-          constraint = type "Fill" 1;
-          component_type = provider {
-            layout = [ (graph "visualizer.bins" "Gray" "Braille" false) ];
-          };
-        }
-        {
-          block.title = "CLOCK";
-          constraint = type "Length" 30;
-          component_type = provider {
-            layout = [
-              #1
-              (hgroup [
+        (bar-element [
+          (block { title = "VISUALIZER"; })
+          (layout 1 [
+            (graph "visualizer.bins" {
+              fill = false;
+              marker = "Braille";
+            })
+          ])
+        ])
+        (bar-element [
+          (block { title = "CLOCK"; })
+          (layout 1 [
+            (group "h" [
+              (text "\${clock.day}")
+              (text "\${clock.time}")
+              (text "\${clock.date}")
+            ])
+          ])
+          (layout 2 [
+            (group "h" [
+              (group "v" [
+                (text "DAY")
                 (text "\${clock.day}")
+              ])
+              (group "v" [
+                (text "TIME")
                 (text "\${clock.time}")
+              ])
+              (group "v" [
+                (text "DATE")
                 (text "\${clock.date}")
               ])
-              #2
-              (hgroup [
-                (vgroup [
-                  (text "DAY")
-                  (text "\${clock.day}")
-                ])
-                (vgroup [
-                  (text "TIME")
-                  (text "\${clock.time}")
-                ])
-                (vgroup [
-                  (text "DATE")
-                  (text "\${clock.date}")
+            ])
+          ])
+        ])
+        (bar-element [
+          (layout 1 [
+            (group "h" [
+              (text "\${media.title} | $[ul](\${media.album}) - $[ul](\${media.artist})")
+              (group "h" { width = "8"; } [
+                (text "⏮ " { on-click = "media.prev"; })
+                (text "\${media.button_symbol} " { on-click = "media.play"; })
+                (text "⏭ " { on-click = "media.next"; })
+              ])
+              (text "\${media.position}/\${media.length}")
+            ])
+          ])
+          (layout 2 [
+            (group "h" [
+              (image "media.art" { width = 5; })
+              (group "v" { width = "3#"; } [
+                (text "\${media.title}")
+                (text "$[ul](\${media.album}) | $[ul](\${media.artist})")
+              ])
+              (group "v" { width = "2#"; } [
+                (group "h" [
+                  (group "h" { width = "8"; } [
+                    (text "⏮ " { on-click = "media.prev"; })
+                    (text "\${media.button_symbol} " { on-click = "media.play"; })
+                    (text "⏭ " { on-click = "media.next"; })
+                  ])
+                  (text "\${media.position}/\${media.length}")
                 ])
               ])
-            ];
-          };
-        }
-        {
-          block.title = "NOW PLAYING";
-          constraint = type "Length" 70;
-          component_type = provider {
-            layout = [
-              #1
-              (hgroup [
-                (image "media.art" 2)
-                (width { Percentage = 70; } (
-                  hgroup [
-                    (text "$[ul](\${media.title}) | $[ul](\${media.artist})")
-                  ]
-                ) # |> width { Percentage = 70; }
-                )
-                (text "\${media.buttons}")
-                (width { Percentage = 30; } (bar "media.progress" "Horizontal" "Red" "DarkGray"))
-                (text "\${media.position}/\${media.length}")
+            ])
+          ])
+        ])
+        (bar-element [
+          (block { title = "CPU"; })
+          (layout 1 [
+            (group "h" [
+              (text "LOAD: \${cpu.load}%")
+              (text "FREQ: \${cpu.FREQ}GHZ")
+              (bar "h" {
+                var = "cpu.load";
+                fg = "blue";
+                bg = "dark-gray";
+              })
+            ])
+          ])
+          (layout 2 [
+            (group "h" [
+              (group "v" [
+                (text "LOAD")
+                (text "\${cpu.load}%")
               ])
-              #2
-              (hgroup [
-                (image "art" 5)
-                (width { Percentage = 60; } (vgroup [
-                  (text "\${media.title}")
-                  (text "$[ul](\${media.album}) | $[ul](\${media.artist})")
-                ])
-                  # |> width { Percentage = 60; }
-                )
-                (type "VGroup" {
-                  width = (type "Percentage" 40);
-                  elements = [
-                    (hgroup [
-                      (text "\${media.buttons}")
-                      (text "\${media.position}/\${media.length}")
-                    ])
-                    (bar "media.progress" "Horizontal" "Red" "DarkGray")
-                  ];
-                })
+              (group "v" [
+                (text "FREQ")
+                (text "\${cpu.freq}GHZ")
               ])
-            ];
-          };
-        }
-        {
-          block.title = "CPU";
-          constraint = type "Length" 35;
-          component_type = provider {
-            layout = [
-              #1
-              (hgroup [
-                (text "LOAD: \${cpu.load}%")
-                (text "FREQ: \${cpu.freq}GHZ")
-                (bar "cpu.load" "Horizontal" "Blue" "DarkGray")
+              (graph "cpu.acc" {
+                fg = "blue";
+                marker = "Octant";
+                fill = true;
+              })
+            ])
+          ])
+        ])
+        (bar-element [
+          (block { title = "MEM"; })
+          (layout 1 [
+            (group "h" [
+              (text "\${mem.used}GB/\${mem.total}GB")
+              (bar "v" {
+                var = "mem.percent";
+                fg = "yellow";
+                bg = "dark-gray";
+              })
+            ])
+          ])
+          (layout 2 [
+            (group "h" [
+              (group "v" [
+                (text "FREE")
+                (text "\${mem.free}GB")
               ])
-              #2
-              (hgroup [
-                (vgroup [
-                  (text "LOAD")
-                  (text "\${cpu.load}%")
-                ])
-                (vgroup [
-                  (text "FREQ")
-                  (text "\${cpu.freq}GHZ")
-                ])
-                (graph "cpu.acc" "Blue" "Octant" true)
+              (group "v" [
+                (text "USED")
+                (text "\${mem.used}GB")
               ])
-            ];
-          };
-        }
-        {
-          block.title = "MEM";
-          constraint = type "Length" 27;
-          component_type = provider {
-            provider = "mem";
-            layout = [
-              #1
-              (hgroup [
-                (text "\${mem.used}GB/\${mem.total}GB")
-                (bar "mem.percent" "Horizontal" "Yellow" "DarkGray")
+              (group "v" [
+                (text "TOTAL")
+                (text "\${mem.total}GB")
               ])
-              #2
-              (hgroup [
-                (vgroup [
-                  (text "FREE")
-                  (text "\${mem.available}GB")
-                ])
-                (vgroup [
-                  (text "USED")
-                  (text "\${mem.used}GB")
-                ])
-                (vgroup [
-                  (text "TOTAL")
-                  (text "\${mem.total}GB")
-                ])
-                (bar "mem.percent" "Vertical" "Yellow" "DarkGray")
-              ])
-            ];
-          };
-        }
-        {
-          block.title = "NET";
-          constraint = type "Length" 16;
-          component_type = provider {
-            layout = [
-              #1
-              (hgroup [
-                (text "RX: \${net.recv}")
-                (text "TX: \${net.sent}")
-              ])
-              #2
-              (no-center (vgroup [
-                (text "RX: \${net.recv}MB/S")
-                (text "TX: \${net.sent}MB/S")
-              ])
-                # |> no-center
-              )
-            ];
-          };
-        }
+              (bar "v" {
+                var = "mem.percent";
+                fg = "yellow";
+                bg = "dark-gray";
+              })
+            ])
+          ])
+        ])
+        (bar-element [
+          (block { title = "NET"; })
+          (layout 1 [
+            (group "h" [
+              (text "RX: \${net.recv}")
+              (text "TX: \${net.sent}")
+            ])
+          ])
+          (layout 2 [
+            (group "v" { center = false; } [
+              (text "RX: \${net.recv}MB/S")
+              (text "TX: \${net.sent}MB/S")
+            ])
+          ])
+        ])
       ];
-      type = lib.types.listOf lib.types.anything;
     };
     providers = lib.mkOption {
       description = "Defines the providers used by rat-bar.";
@@ -260,14 +254,14 @@ in
   };
   config = lib.mkIf cfg.enable {
     home.packages = [ cfg.package ];
-    xdg.configFile."rat-bar/layout.yaml".source = layout;
+    xdg.configFile."rat-bar/layout.kdl".source = layoutCfg;
     xdg.configFile."rat-bar/providers.yaml".source = providers;
 
     systemd.user.services.rat-bar = lib.mkIf cfg.service.enable {
       Unit = {
         After = [ "graphical-session.target" ];
         X-Restart-Triggers = [
-          config.xdg.configFile."rat-bar/layout.yaml".source
+          config.xdg.configFile."rat-bar/layout.kdl".source
           config.xdg.configFile."rat-bar/providers.yaml".source
         ];
         StartLimitBurst = 3;
