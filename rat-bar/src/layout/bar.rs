@@ -1,8 +1,11 @@
 use std::str::FromStr;
 
+use ratatui::buffer::Buffer;
 use ratatui::layout::Constraint as RatConstraint;
 use ratatui::layout::Position;
+use ratatui::layout::Rect;
 use ratatui::style::Color;
+use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::widgets::StatefulWidget;
 use ratatui::widgets::Widget;
@@ -12,6 +15,7 @@ use crate::app::State;
 use crate::event::Request;
 use crate::layout::Direction;
 use crate::layout::ProviderMessage;
+use crate::layout::style::ParseStyle;
 use crate::layout::style::interpolate_string;
 use crate::layout::{Constraint, ElementWidget};
 use crate::widgets::percentage_bar::BlockPercentageBar;
@@ -32,6 +36,8 @@ pub struct Bar {
     on_click: Option<ProviderMessage>,
     #[knuffel(property, str)]
     on_scroll: Option<ProviderMessage>,
+    #[knuffel(property, str, default = Some(ParseStyle(Style::new().fg(Color::White).bg(Color::Gray))))]
+    click_style: Option<ParseStyle>,
 }
 
 impl ElementWidget for Bar {
@@ -69,6 +75,19 @@ impl ElementWidget for Bar {
             message: serde_json::to_string(&json!({message: difference})).unwrap(),
         });
     }
+    fn apply_click_style(
+        &self,
+        buf: &mut Buffer,
+        area: Rect,
+        style_mod: Option<Style>,
+        state: &mut State,
+    ) {
+        let Some(style) = style_mod else { return };
+        let Some(click) = state.mouse.is_click_in(area) else {
+            return;
+        };
+        buf[click].set_style(style);
+    }
 }
 impl StatefulWidget for &mut Bar {
     type State = State;
@@ -93,13 +112,14 @@ impl StatefulWidget for &mut Bar {
 
         let style = Style::new().fg(fg).bg(bg);
 
-        self.interact(self.on_click.clone(), self.on_scroll.clone(), area, state);
-
         BlockPercentageBar {
             style,
             percentage,
             direction: self.direction.into(),
         }
         .render(area, buf);
+
+        self.interact(self.on_click.clone(), self.on_scroll.clone(), area, state);
+        self.apply_click_style(buf, area, self.click_style.as_deref().copied(), state);
     }
 }

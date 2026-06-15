@@ -11,13 +11,40 @@ use serde_json::Value;
 use crate::app::State;
 
 pub struct ParseStyle(pub ratatui::style::Style);
+
 impl FromStr for ParseStyle {
     type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ParseStyle(parse_style(s)))
+        let style = s
+            .split(',')
+            .fold(Style::default(), |style, str| match str.split_once(':') {
+                Some((str, args)) => match str.trim() {
+                    "bg" => Color::from_str(args.trim())
+                        .map(|c| style.bg(c))
+                        .unwrap_or(style),
+                    "fg" => Color::from_str(args.trim())
+                        .map(|c| style.fg(c))
+                        .unwrap_or(style),
+                    _ => style,
+                },
+                None => match str.trim() {
+                    "ul" => style.underlined(),
+                    "rv" => style.reversed(),
+                    "it" => style.italic(),
+                    "bo" => style.bold(),
+                    "sb" => style.slow_blink(),
+                    "rb" => style.rapid_blink(),
+                    "cr" => style.crossed_out(),
+                    "dm" => style.dim(),
+                    "hd" => style.hidden(),
+                    _ => style,
+                },
+            });
+        Ok(ParseStyle(style))
     }
 }
+
 impl Deref for ParseStyle {
     type Target = Style;
 
@@ -25,13 +52,14 @@ impl Deref for ParseStyle {
         &self.0
     }
 }
+
 lazy_static! {
     static ref VARIABLES: regex::Regex = regex::Regex::new(r"\$\{(?<var>[^${}]*)\}").unwrap();
     static ref FORMAT: regex::Regex =
         regex::Regex::new(r"\$\[(?<args>[^\[\]]*)\]\((?<text>[^)\\]*(?:\\.[^)\\]*)*)\)").unwrap();
 }
 
-pub fn interpolate_string<'a>(string: &'a str, state: &State) -> String {
+pub fn interpolate_string(string: &str, state: &State) -> String {
     VARIABLES
         .replace_all(string, |captures: &Captures| {
             let var = captures.name("var").unwrap();
@@ -50,7 +78,7 @@ pub fn interpolate_string<'a>(string: &'a str, state: &State) -> String {
         })
         // replace normal spaces with u+2002 because kitty is weird
         // otherwise 2 width symbols render as 1 width on resize
-        // completely ruins the appearance of nerd fonts
+        // which completely ruins the appearance of nerd fonts
         .replace(char::is_whitespace, " ")
 }
 

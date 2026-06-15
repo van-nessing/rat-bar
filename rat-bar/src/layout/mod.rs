@@ -4,8 +4,9 @@ use std::{num::ParseIntError, str::FromStr};
 use crossterm::event::{MouseButton, MouseEventKind};
 use knuffel::errors::DecodeError;
 use knuffel::traits::ErrorSpan;
+use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Stylize};
+use ratatui::style::{Color, Style, Stylize};
 use ratatui::widgets::{Block as RatBlock, Borders as RatBorders};
 use ratatui::widgets::{Padding, Widget};
 use ratatui::{layout::Constraint as RatConstraint, widgets::StatefulWidget};
@@ -88,6 +89,19 @@ pub trait ElementWidget {
                 self.on_scroll(on_scroll.clone(), dir, state);
             }
         }
+    }
+    fn apply_click_style(
+        &self,
+        buf: &mut Buffer,
+        area: Rect,
+        click_style: Option<Style>,
+        state: &mut State,
+    ) {
+        let Some(style) = click_style else { return };
+        let Some(_click) = state.mouse.is_click_in(area) else {
+            return;
+        };
+        buf.set_style(area, style);
     }
     // fn interact(&self, )
 }

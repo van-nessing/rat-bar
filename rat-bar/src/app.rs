@@ -38,14 +38,15 @@ pub struct Dragging {
 
 pub struct MouseState {
     pub events: Vec<MouseEvent>,
-    pub dragging: Option<Dragging>,
+    pub clicked: Option<Position>,
     pub scroll_speed: f32,
 }
+
 impl Default for MouseState {
     fn default() -> Self {
         Self {
             events: Default::default(),
-            dragging: Default::default(),
+            clicked: Default::default(),
             scroll_speed: 1.0,
         }
     }
@@ -58,6 +59,9 @@ impl MouseState {
             .partition(|event| area.contains(Position::new(event.column, event.row)));
         self.events = events;
         captured
+    }
+    pub fn is_click_in(&self, area: Rect) -> Option<Position> {
+        self.clicked.filter(|click| area.contains(*click))
     }
 }
 
@@ -91,12 +95,17 @@ impl App {
             Event::Crossterm(CrosstermEvent::Key(key_event)) if key_event.is_press() => {
                 self.handle_key_events(key_event)
             }
+            Event::Crossterm(CrosstermEvent::Mouse(mouse_event)) if mouse_event.kind.is_down() => {
+                self.state.mouse.clicked = Some(Position::new(mouse_event.column, mouse_event.row));
+                self.state.mouse.events.push(mouse_event);
+            }
             Event::Crossterm(CrosstermEvent::Mouse(mouse_event))
-                if mouse_event.kind.is_down()
-                    | mouse_event.kind.is_scroll_up()
-                    | mouse_event.kind.is_scroll_down() =>
+                if mouse_event.kind.is_scroll_up() | mouse_event.kind.is_scroll_down() =>
             {
                 self.state.mouse.events.push(mouse_event);
+            }
+            Event::Crossterm(CrosstermEvent::Mouse(mouse_event)) if mouse_event.kind.is_up() => {
+                self.state.mouse.clicked = None;
             }
             Event::Crossterm(_) => {}
             Event::UpdateProviders { providers } => {

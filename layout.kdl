@@ -63,7 +63,7 @@
 layout {
   block title="VISUALIZER"
   layout {
-    graph "visualizer.bins" fg="gray" fill=false marker="Braille"
+    graph var="visualizer.bins" fg="gray" fill=false marker="Braille"
   }
 }
 layout {
@@ -103,14 +103,14 @@ layout {
       }
       group "v" width="2#" {
         group "h" {
-          group "h" {
+          group "h" width="8"{
             text "⏮ " on-click="media.prev"
             text "${media.button_symbol} " on-click="media.play"
             text "⏭ " on-click="media.next"
           }
           text "${media.position}/${media.length}"
         }
-        bar "horizontal" bg="dark-gray" fg="red" var="media.progress"
+        bar "horizontal" bg="dark-gray" fg="red" var="media.progress" on-click="media.pos"
       }
     }
   }
@@ -127,7 +127,7 @@ layout {
         text "FREQ"
         text "${cpu.freq}GHZ"
       }
-      graph "cpu.acc" fg="blue" fill=true marker="Octant"
+      graph var="cpu.acc" fg="blue" fill=true marker="Octant"
     }
   }
 }

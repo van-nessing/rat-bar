@@ -22,13 +22,10 @@ use std::{
     time::{Duration, Instant},
 };
 use zbus::{
-    blocking::{
-        Connection,
-        // fdo::{DBusProxy, PropertiesProxy},
-    },
+    blocking::{Connection, Proxy},
     fdo::{DBusProxy, PropertiesProxy},
     names::OwnedBusName,
-    zvariant::{Type, as_value::optional},
+    zvariant::{OwnedObjectPath, Type, as_value::optional},
 };
 
 pub mod dbus;
@@ -45,11 +42,17 @@ pub struct Media {
 struct Player {
     quit: Sender<()>,
     requests: Sender<Request>,
+    state: PlayerState,
+    last_unpaused: Instant,
+}
+
+#[derive(Debug, Clone)]
+struct PlayerState {
     metadata: Metadata,
     identity: String,
     position: MicroDuration,
-    last_unpaused: Instant,
     status: PlaybackStatus,
+    volume: f64,
 }
 
 #[derive(clap::Args, Debug)]
@@ -57,12 +60,15 @@ pub struct MediaArgs {
     /// Amount of time between writing to stdout
     #[arg(value_parser = humantime::parse_duration)]
     duration: Duration,
-    #[arg(long, default_value_t = '⏵')]
-    playing_symbol: char,
-    #[arg(long, default_value_t = '⏸')]
-    pause_symbol: char,
-    #[arg(long, default_value_t = '⏹')]
-    stop_symbol: char,
+    #[arg(long, default_value_t = String::from("⏵"))]
+    /// Symbol used to show playing state
+    playing_symbol: String,
+    #[arg(long, default_value_t = String::from("⏸"))]
+    /// Symbol used to show paused state
+    pause_symbol: String,
+    #[arg(long, default_value_t = String::from("⏹"))]
+    /// Symbol used to show stopped state
+    stop_symbol: String,
     /// Status to consider a player valid for selection
     priority: PlaybackStatus,
     /// List of players to choose in order of preference
@@ -79,6 +85,7 @@ pub struct MediaFormat<'a> {
     artist: String,
     art: &'a str,
     button_symbol: String,
+    volume: u8,
 }
 
 enum Event {
@@ -91,7 +98,7 @@ enum Event {
     },
     UpdatePlayer {
         name: Arc<OwnedBusName>,
-        data: Data,
+        kind: UpdateKind,
     },
     Seeked {
         name: Arc<OwnedBusName>,
@@ -101,23 +108,22 @@ enum Event {
     PlayerRequest(RequestKind),
     Error(eyre::Report),
 }
+enum UpdateKind {
+    Metadata(Metadata),
+    PlaybackStatus(PlaybackStatus),
+    Volume(f64),
+}
 
 enum RequestKind {
     Next,
     Prev,
     Play,
-    Seek(f32),
+    SetPos(f32),
+    AddVol(f32),
 }
 pub struct Request {
-    length: MicroDuration,
+    state: PlayerState,
     kind: RequestKind,
-}
-
-#[derive(Deserialize, Type, Debug)]
-struct Signal<'a> {
-    _address: &'a str,
-    data: Data,
-    _f3: Vec<&'a str>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,7 +131,8 @@ struct ButtonMessage {
     next: Option<f32>,
     prev: Option<f32>,
     play: Option<f32>,
-    seek: Option<f32>,
+    set_pos: Option<f32>,
+    add_vol: Option<f32>,
 }
 
 #[derive(Deserialize, Debug, Type, Default)]
@@ -138,6 +145,8 @@ pub struct Data {
     metadata: Option<Metadata>,
     #[serde(with = "optional")]
     rate: Option<f64>,
+    #[serde(with = "optional")]
+    volume: Option<f64>,
 }
 
 impl Default for MediaFormat<'_> {
@@ -151,6 +160,7 @@ impl Default for MediaFormat<'_> {
             artist: String::new(),
             button_symbol: String::from("⏵ "),
             art: "",
+            volume: 0,
         }
     }
 }
@@ -166,21 +176,6 @@ async fn listen_player(
         let player_proxy = PlayerProxy::new(&conn, &*bus).await?;
         (
             async {
-                let props = PropertiesProxy::new(&conn, &*bus, "/org/mpris/MediaPlayer2").await?;
-                let mut props = props.receive_properties_changed().await?;
-                while let Some(props) = props.next().await {
-                    let body = props.message().body();
-                    let deser = body.deserialize::<Signal>()?;
-                    events
-                        .send(Event::UpdatePlayer {
-                            name: bus.clone(),
-                            data: deser.data,
-                        })
-                        .await?;
-                }
-                Ok(())
-            },
-            async {
                 let mut signals = player_proxy.receive_seeked().await?;
                 while let Some(seeked) = signals.next().await {
                     let position = seeked.message().body().deserialize::<MicroDuration>()?;
@@ -194,20 +189,74 @@ async fn listen_player(
                 Ok(())
             },
             async {
+                let mut signals = player_proxy.receive_playback_status_changed().await;
+                while let Some(status) = signals.next().await {
+                    let status = dbg!(status.get().await?);
+                    events
+                        .send(Event::UpdatePlayer {
+                            name: bus.clone(),
+                            kind: UpdateKind::PlaybackStatus(status),
+                        })
+                        .await?;
+                }
+                Ok(())
+            },
+            async {
+                let mut signals = player_proxy.receive_metadata_changed().await;
+                while let Some(metadata) = signals.next().await {
+                    let metadata = metadata.get().await?;
+                    events
+                        .send(Event::UpdatePlayer {
+                            name: bus.clone(),
+                            kind: UpdateKind::Metadata(metadata),
+                        })
+                        .await?;
+                }
+                Ok(())
+            },
+            async {
+                let mut signals = player_proxy.receive_volume_changed().await;
+                while let Some(volume) = signals.next().await {
+                    let volume = volume.get().await?;
+                    events
+                        .send(Event::UpdatePlayer {
+                            name: bus.clone(),
+                            kind: UpdateKind::Volume(volume),
+                        })
+                        .await?;
+                }
+                Ok(())
+            },
+            async {
                 while let Ok(request) = requests.recv().await {
                     let _ = match request.kind {
-                        RequestKind::Seek(difference) => {
-                            if let Some(length) = request.length.0 {
-                                let sign = if difference.signum() == 1.0 { 1 } else { -1 };
-                                let offset = Duration::from_secs_f32(
-                                    (length.as_secs_f32() * difference).abs(),
+                        RequestKind::AddVol(percent) => {
+                            let volume = request.state.volume + (percent as f64 / 100.0);
+                            player_proxy.set_volume(volume).await
+                        }
+                        RequestKind::SetPos(percent) => {
+                            let Some(len) = request.state.metadata.length.0 else {
+                                continue;
+                            };
+                            let delta = Duration::from_secs_f32(
+                                len.as_secs_f32() * (percent / 100.0).abs(),
+                            );
+                            let position = if percent.is_sign_positive() {
+                                request.state.position.0.map(|pos| pos + delta)
+                            } else {
+                                request.state.position.0.map(|pos| pos - delta)
+                            };
+
+                            let Some(position) = position else {
+                                continue;
+                            };
+
+                            player_proxy
+                                .set_position(
+                                    &request.state.metadata.track_id,
+                                    position.as_micros() as i64,
                                 )
-                                .as_micros();
-                                if let Ok(offset) = i64::try_from(offset) {
-                                    let _ = player_proxy.seek(offset * sign).await;
-                                }
-                            }
-                            Ok(())
+                                .await
                         }
                         RequestKind::Next => player_proxy.next().await,
                         RequestKind::Prev => player_proxy.previous().await,
@@ -228,7 +277,7 @@ async fn listen_player(
         let _ = events.send(Event::Error(report)).await;
     }
 }
-
+//
 async fn listen_names(conn: Arc<zbus::Connection>, tx: Sender<Event>) -> eyre::Result<()> {
     let proxy = zbus::fdo::DBusProxy::new(&conn).await?;
     let mut names = proxy.receive_name_owner_changed().await?;
@@ -264,12 +313,11 @@ async fn fetch_player(
     let proxy = PlayerProxy::new(&conn, &*bus).await?;
     let metadata = proxy.metadata().await?;
     let position = proxy.position().await?;
+    let volume = proxy.volume().await?;
     let status = proxy.playback_status().await?;
-    drop(proxy);
 
     let proxy = MediaPlayer2Proxy::new(&conn, &*bus).await?;
     let identity = proxy.identity().await?;
-    drop(proxy);
 
     let (quit_sender, quit_receiver) = smol::channel::bounded(1);
     let (requests_sender, requests_receiver) = smol::channel::bounded(4);
@@ -284,12 +332,15 @@ async fn fetch_player(
 
     Ok(Player {
         requests: requests_sender,
-        identity,
         quit: quit_sender,
         last_unpaused: Instant::now(),
-        metadata,
-        position: position.into(),
-        status,
+        state: PlayerState {
+            metadata,
+            identity,
+            position: position.into(),
+            status,
+            volume,
+        },
     })
 }
 
@@ -340,35 +391,28 @@ impl Provider for Media {
                     loop {
                         self.send(&mut stdout)?;
                         match self.rx.recv().await? {
+                            Event::UpdatePlayer { name, kind } => {
+                                let player = self.players.get_mut(&name).ok_or_else(|| {
+                                    eyre::eyre::eyre!(
+                                        "received update for non existing player: {name}"
+                                    )
+                                })?;
+                                match kind {
+                                    UpdateKind::Metadata(metadata) => {
+                                        player.state.metadata = metadata
+                                    }
+                                    UpdateKind::PlaybackStatus(status) => {
+                                        player.state.status = status
+                                    }
+                                    UpdateKind::Volume(volume) => player.state.volume = volume,
+                                }
+                            }
                             Event::AddPlayer { name, player } => {
                                 self.players.insert(name, player);
                             }
                             Event::RemovePlayer { name } => {
                                 if let Some(player) = self.players.remove(&name) {
                                     player.quit.send(()).await?;
-                                }
-                            }
-                            Event::UpdatePlayer { name, data } => {
-                                let player = self.players.get_mut(&name).ok_or_else(|| {
-                                    eyre::eyre::eyre!(
-                                        "received update for non existing player: {name}"
-                                    )
-                                })?;
-                                if let Some(metadata) = data.metadata {
-                                    player.metadata = metadata;
-                                }
-                                if let Some(status) = data.playback_status {
-                                    match status {
-                                        PlaybackStatus::Playing => {
-                                            player.last_unpaused = Instant::now()
-                                        }
-                                        PlaybackStatus::Stopped => {
-                                            player.position.0 = Some(Duration::ZERO)
-                                        }
-                                        // handled by seeked
-                                        PlaybackStatus::Paused => (),
-                                    }
-                                    player.status = status;
                                 }
                             }
                             Event::Seeked { name, position } => {
@@ -378,7 +422,7 @@ impl Provider for Media {
                                     )
                                 })?;
                                 player.last_unpaused = Instant::now();
-                                player.position = position;
+                                player.state.position = position;
                             }
                             Event::Error(report) => {
                                 Err(report)?;
@@ -388,7 +432,7 @@ impl Provider for Media {
                                     player
                                         .requests
                                         .send(Request {
-                                            length: player.metadata.length,
+                                            state: player.state.clone(),
                                             kind: request,
                                         })
                                         .await?
@@ -408,17 +452,21 @@ impl Provider for Media {
                         if let Ok(message) = serde_json::from_str::<ButtonMessage>(&buf)
                             .with_section(|| buf.clone().header("message"))
                         {
-                            if let Some(_) = message.next {
+                            if message.next.is_some() {
                                 tx.send(Event::PlayerRequest(RequestKind::Next)).await?;
                             }
-                            if let Some(_) = message.prev {
+                            if message.prev.is_some() {
                                 tx.send(Event::PlayerRequest(RequestKind::Prev)).await?;
                             }
-                            if let Some(_) = message.play {
+                            if message.play.is_some() {
                                 tx.send(Event::PlayerRequest(RequestKind::Play)).await?;
                             }
-                            if let Some(delta) = message.seek {
-                                tx.send(Event::PlayerRequest(RequestKind::Seek(delta / 100.0)))
+                            if let Some(pos) = message.set_pos {
+                                tx.send(Event::PlayerRequest(RequestKind::SetPos(pos)))
+                                    .await?;
+                            }
+                            if let Some(vol) = message.add_vol {
+                                tx.send(Event::PlayerRequest(RequestKind::AddVol(vol)))
                                     .await?;
                             }
                         }
@@ -432,43 +480,56 @@ impl Provider for Media {
         let player = self.active_player();
 
         if let Some((_, player)) = player {
-            let position = if player.status == PlaybackStatus::Playing {
+            let position = if player.state.status == PlaybackStatus::Playing {
                 player
+                    .state
                     .position
                     .0
                     .map(|d| d + player.last_unpaused.elapsed())
             } else {
-                player.position.0
+                player.state.position.0
             };
 
-            let length = player.metadata.length.0;
+            let length = player.state.metadata.length.0;
             Ok(MediaFormat {
                 length: format_time(length),
                 position: format_time(position),
-                progress: ((100 * position.unwrap_or_default().as_secs())
-                    .checked_div(length.as_ref().map(Duration::as_secs).unwrap_or(1))
-                    .unwrap_or_default()) as f32,
+                progress: position
+                    .as_ref()
+                    .map(Duration::as_secs)
+                    .zip(length.as_ref().map(Duration::as_secs))
+                    .and_then(|(len, pos)| pos.checked_div(len))
+                    .unwrap_or(0) as f32,
                 title: player
+                    .state
                     .metadata
                     .title
                     .replace(")", r"\)")
                     .replace("(", r"\("),
                 album: player
+                    .state
                     .metadata
                     .album
                     .replace(")", r"\)")
                     .replace("(", r"\("),
                 artist: player
+                    .state
                     .metadata
                     .artists
                     .join(", ")
                     .replace(")", r"\)")
                     .replace("(", r"\("),
-                art: player.metadata.art.strip_prefix("file://").unwrap_or(""),
+                art: player
+                    .state
+                    .metadata
+                    .art
+                    .strip_prefix("file://")
+                    .unwrap_or(""),
                 button_symbol: self.button(player).to_string(),
+                volume: (player.state.volume * 100.0) as u8,
             })
         } else {
-            Ok(MediaFormat::init(self.args.stop_symbol))
+            Ok(MediaFormat::init(&self.args.stop_symbol))
         }
     }
     fn update(&mut self) -> eyre::Result<()> {
@@ -479,7 +540,7 @@ impl Provider for Media {
     }
 }
 impl MediaFormat<'_> {
-    pub fn init(stop_symbol: char) -> Self {
+    pub fn init(stop_symbol: &str) -> Self {
         Self {
             length: "xx:xx".into(),
             position: "xx:xx".into(),
@@ -489,16 +550,17 @@ impl MediaFormat<'_> {
             artist: String::new(),
             button_symbol: String::from(stop_symbol),
             art: "",
+            volume: 0,
         }
     }
 }
 
 impl Media {
-    fn button(&self, active_player: &Player) -> char {
-        match active_player.status {
-            PlaybackStatus::Playing => self.args.playing_symbol,
-            PlaybackStatus::Paused => self.args.pause_symbol,
-            PlaybackStatus::Stopped => self.args.stop_symbol,
+    fn button(&self, active_player: &Player) -> &str {
+        match active_player.state.status {
+            PlaybackStatus::Playing => &self.args.playing_symbol,
+            PlaybackStatus::Paused => &self.args.pause_symbol,
+            PlaybackStatus::Stopped => &self.args.stop_symbol,
         }
     }
     fn active_player(&self) -> Option<(&Arc<OwnedBusName>, &Player)> {
@@ -509,11 +571,11 @@ impl Media {
                     .players
                     .iter()
                     .position(|prio| {
-                        bus.contains(prio) | player.identity.to_lowercase().contains(prio)
+                        bus.contains(prio) | player.state.identity.to_lowercase().contains(prio)
                     })
                     .unwrap_or(usize::MAX)
             })
-            .find(|(_, player)| player.status <= self.args.priority)
+            .find(|(_, player)| player.state.status <= self.args.priority)
     }
     fn active_player_mut(&mut self) -> Option<(&Arc<OwnedBusName>, &mut Player)> {
         self.players
@@ -523,11 +585,11 @@ impl Media {
                     .players
                     .iter()
                     .position(|prio| {
-                        bus.contains(prio) | player.identity.to_lowercase().contains(prio)
+                        bus.contains(prio) | player.state.identity.to_lowercase().contains(prio)
                     })
                     .unwrap_or(usize::MAX)
             })
-            .find(|(_, player)| player.status <= self.args.priority)
+            .find(|(_, player)| player.state.status <= self.args.priority)
     }
 }
 

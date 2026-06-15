@@ -25,10 +25,10 @@ use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use zbus::{
     proxy,
-    zvariant::{OwnedValue, Signature, Type, Value, as_value},
+    zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Signature, Type, Value, as_value},
 };
 
-#[derive(Debug, Deserialize, Default, Type)]
+#[derive(Debug, Deserialize, Type, Clone)]
 #[zvariant(signature = "dict")]
 #[serde(default)]
 pub struct Metadata {
@@ -42,8 +42,25 @@ pub struct Metadata {
     pub album: String,
     #[serde(rename = "xesam:artist", with = "as_value")]
     pub artists: Vec<String>,
-    // #[zvariant(rename = "xesam:artist")]
-    // pub url: String,
+    #[serde(rename = "mpris:trackid", with = "as_value", default = "default_path")]
+    pub track_id: OwnedObjectPath,
+}
+impl Default for Metadata {
+    fn default() -> Self {
+        Self {
+            length: Default::default(),
+            art: Default::default(),
+            title: Default::default(),
+            album: Default::default(),
+            artists: Default::default(),
+            track_id: default_path(),
+        }
+    }
+}
+fn default_path() -> OwnedObjectPath {
+    ObjectPath::try_from(String::from("/org/mpris/MediaPlayer2/TrackList/NoTrack"))
+        .unwrap()
+        .into()
 }
 
 #[derive(Deserialize, Default, Debug, Clone, Copy)]
@@ -52,7 +69,12 @@ pub struct MicroDuration(pub Option<Duration>);
 
 impl From<i64> for MicroDuration {
     fn from(value: i64) -> Self {
-        MicroDuration(u64::try_from(value).map(Duration::from_micros).ok())
+        MicroDuration(
+            u64::try_from(value)
+                .ok()
+                .filter(|&d| d < i64::MAX as u64)
+                .map(Duration::from_micros),
+        )
     }
 }
 
@@ -126,10 +148,10 @@ impl TryFrom<OwnedValue> for Metadata {
                 .remove("xesam:artist")
                 .and_then(convert)
                 .unwrap_or_default(),
-            // url: map
-            //     .remove("xesam:url")
-            //     .and_then(convert)
-            //     .unwrap_or_default(),
+            track_id: map
+                .remove("mpris:trackid")
+                .and_then(convert)
+                .unwrap_or_else(default_path),
         })
     }
 }
@@ -234,4 +256,16 @@ pub trait Player {
     fn volume(&self) -> zbus::Result<f64>;
     #[zbus(property)]
     fn set_volume(&self, value: f64) -> zbus::Result<()>;
+
+    /// Shuffle property
+    #[zbus(property)]
+    fn shuffle(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn set_shuffle(&self, value: bool) -> zbus::Result<()>;
+
+    /// LoopStatus property
+    #[zbus(property)]
+    fn loop_status(&self) -> zbus::Result<String>;
+    #[zbus(property)]
+    fn set_loop_status(&self, value: String) -> zbus::Result<()>;
 }

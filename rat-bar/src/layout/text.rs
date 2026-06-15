@@ -1,15 +1,14 @@
 use std::convert::Infallible;
 
-use ratatui::{layout::Constraint as RatConstraint, widgets::StatefulWidget};
-
 use crate::{
     app::State,
     layout::{
         Constraint, ElementWidget, ProviderMessage,
-        style::{interpolate_string, style_string},
+        style::{ParseStyle, interpolate_string, style_string},
     },
     widgets::scroll_text::{ScrollText, ScrollTextState},
 };
+use ratatui::{layout::Constraint as RatConstraint, style::Style, widgets::StatefulWidget};
 
 #[derive(knuffel::Decode)]
 pub struct Text {
@@ -23,6 +22,8 @@ pub struct Text {
     on_click: Option<ProviderMessage>,
     #[knuffel(property, str)]
     on_scroll: Option<ProviderMessage>,
+    #[knuffel(property, str, default = Some(ParseStyle(Style::new().reversed())))]
+    click_style: Option<ParseStyle>,
     scroll_state: ScrollTextState,
 }
 struct TextString(String);
@@ -59,8 +60,9 @@ impl StatefulWidget for &mut Text {
         let string = interpolate_string(&self.string, state);
         let line = style_string(string.into());
 
-        self.interact(self.on_click.clone(), self.on_scroll.clone(), area, state);
-
         ScrollText { line }.render(area, buf, &mut self.scroll_state);
+
+        self.interact(self.on_click.clone(), self.on_scroll.clone(), area, state);
+        self.apply_click_style(buf, area, self.click_style.as_deref().copied(), state);
     }
 }
