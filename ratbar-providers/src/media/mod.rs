@@ -498,7 +498,7 @@ impl Provider for Media {
                     .as_ref()
                     .map(Duration::as_secs)
                     .zip(length.as_ref().map(Duration::as_secs))
-                    .and_then(|(len, pos)| pos.checked_div(len))
+                    .and_then(|(pos, len)| (pos * 100).checked_div(len))
                     .unwrap_or(0) as f32,
                 title: player
                     .state
