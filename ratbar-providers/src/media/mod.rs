@@ -100,10 +100,6 @@ enum Event {
         name: Arc<OwnedBusName>,
         kind: UpdateKind,
     },
-    Seeked {
-        name: Arc<OwnedBusName>,
-        position: MicroDuration,
-    },
     Tick,
     PlayerRequest(RequestKind),
     Error(eyre::Report),
@@ -112,6 +108,7 @@ enum UpdateKind {
     Metadata(Metadata),
     PlaybackStatus(PlaybackStatus),
     Volume(f64),
+    Seeked(MicroDuration),
 }
 
 enum RequestKind {
@@ -180,9 +177,9 @@ async fn listen_player(
                 while let Some(seeked) = signals.next().await {
                     let position = seeked.message().body().deserialize::<MicroDuration>()?;
                     events
-                        .send(Event::Seeked {
+                        .send(Event::UpdatePlayer {
                             name: bus.clone(),
-                            position,
+                            kind: UpdateKind::Seeked(position),
                         })
                         .await?;
                 }
@@ -191,7 +188,7 @@ async fn listen_player(
             async {
                 let mut signals = player_proxy.receive_playback_status_changed().await;
                 while let Some(status) = signals.next().await {
-                    let status = dbg!(status.get().await?);
+                    let status = status.get().await?;
                     events
                         .send(Event::UpdatePlayer {
                             name: bus.clone(),
@@ -392,11 +389,9 @@ impl Provider for Media {
                         self.send(&mut stdout)?;
                         match self.rx.recv().await? {
                             Event::UpdatePlayer { name, kind } => {
-                                let player = self.players.get_mut(&name).ok_or_else(|| {
-                                    eyre::eyre::eyre!(
-                                        "received update for non existing player: {name}"
-                                    )
-                                })?;
+                                let Some(player) = self.players.get_mut(&name) else {
+                                    continue;
+                                };
                                 match kind {
                                     UpdateKind::Metadata(metadata) => {
                                         player.state.metadata = metadata
@@ -405,6 +400,10 @@ impl Provider for Media {
                                         player.state.status = status
                                     }
                                     UpdateKind::Volume(volume) => player.state.volume = volume,
+                                    UpdateKind::Seeked(position) => {
+                                        player.last_unpaused = Instant::now();
+                                        player.state.position = position;
+                                    }
                                 }
                             }
                             Event::AddPlayer { name, player } => {
@@ -414,15 +413,6 @@ impl Provider for Media {
                                 if let Some(player) = self.players.remove(&name) {
                                     player.quit.send(()).await?;
                                 }
-                            }
-                            Event::Seeked { name, position } => {
-                                let player = self.players.get_mut(&name).ok_or_else(|| {
-                                    eyre::eyre::eyre!(
-                                        "received update for non existing player: {name}"
-                                    )
-                                })?;
-                                player.last_unpaused = Instant::now();
-                                player.state.position = position;
                             }
                             Event::Error(report) => {
                                 Err(report)?;
