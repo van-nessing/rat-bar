@@ -43,13 +43,13 @@ pub struct VisualizerArgs {
     #[arg(long, short, default_value_t = 1024)]
     /// Minimum number of samples before processing (should probably be a power of 2)
     sample_count: usize,
-    #[arg(long, short, default_value_t = 8)]
+    #[arg(long, default_value_t = 8)]
     /// Number of past bins to store for smooth falloff
     history_count: usize,
-    #[arg(long, short, default_value_t = 32)]
+    #[arg(long, default_value_t = 32)]
     /// Number of total bins to store
     bin_count: usize,
-    #[arg(long, short, default_value_t = 256)]
+    #[arg(long, default_value_t = 256)]
     /// Number of average amplitudes to store for amplitude averaging
     average_count: usize,
 }

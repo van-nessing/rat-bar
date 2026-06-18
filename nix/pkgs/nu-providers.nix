@@ -2,6 +2,7 @@
   lib,
   writers,
   playerctl,
+  cava,
   nushell,
   root ? ./.,
 }:
@@ -13,19 +14,7 @@ writers.makeScriptWriter ({
     ":"
     "${lib.makeBinPath [
       playerctl
+      cava
     ]}"
   ];
 }) "/bin/ratbar-providers-nu" (root + /example-config/providers.nu)
-# writers.writeNuBin
-# "rat-bar-providers"
-# {
-#   makeWrapperArgs = [
-#     "--prefix"
-#     "PATH"
-#     ":"
-#     "${lib.makeBinPath [
-#       playerctl
-#     ]}"
-#   ];
-# }
-# (root + /example-config/providers.nu)

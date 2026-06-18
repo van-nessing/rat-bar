@@ -295,6 +295,34 @@ def "main pipewire" [
     | each {  update volume {into int} | to json -r | print -r }
 }
 
+def "main visualizer" [
+    bins: int = 32
+] {
+    const FORMAT = "8bit"
+    const TARGET = "/dev/stdout"
+    let config = $"
+    [general]
+    bars = ($bins)
+    [output]
+    method = raw
+    raw_target = /dev/stdout
+    bit_format = 8bit
+    "
+
+    let file = mktemp
+    $config | save -f $file
+
+    ^cava -p $file
+    | into binary  | chunks 1 | into int | each { into float | $in * 100 / 255 }
+    | chunks $bins
+    | each {
+        chunks ($bins // 2) | let bars
+        | $bars.1 | reverse | zip $bars.0
+        | each { math avg | math round } 
+        | {bins: $in} | to json -r | print
+    }
+}
+
 # Various providers that periodically output variables as json
 #
 # You must use one of the following subcommands. Using this command as-is will only produce this help message. 
