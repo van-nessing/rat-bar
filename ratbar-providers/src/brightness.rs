@@ -33,7 +33,7 @@ pub struct BrightnessArgs {
 
 #[derive(serde::Serialize)]
 pub struct BrightnessFormat {
-    brighness: u8,
+    brightness: u8,
 }
 
 impl Provider for Brightness {
@@ -93,15 +93,20 @@ impl Provider for Brightness {
             Event::Message(message) => {
                 if let Some(percentage) = message.add_brightness {
                     if percentage.is_sign_positive() {
-                        self.now += percentage.abs() as u64 * self.max;
+                        self.now += ((percentage.abs() as u64 * self.max) / 100).max(self.max);
                     } else {
-                        self.now -= percentage.abs() as u64 * self.max;
+                        self.now = self
+                            .now
+                            .saturating_sub((percentage.abs() as u64 * self.max) / 100);
                     }
                 }
                 let display = self.args.display.clone();
                 let now = self.now;
                 std::thread::spawn(move || {
-                    std::fs::write(format!("/sys/class/backlight/{}", display), now.to_string())
+                    std::fs::write(
+                        format!("/sys/class/backlight/{}/brightness", display),
+                        now.to_string(),
+                    )
                 });
             }
         }
@@ -110,7 +115,7 @@ impl Provider for Brightness {
     }
     fn format<'a>(&'a self) -> color_eyre::Result<Self::Fmt<'a>> {
         Ok(BrightnessFormat {
-            brighness: (self.now * 100 / self.max) as u8,
+            brightness: (self.now * 100 / self.max) as u8,
         })
     }
 }
