@@ -15,10 +15,6 @@ enum Event {
     Message(Message),
 }
 
-enum Request {
-    AddBrightness(f32),
-}
-
 #[derive(Debug, Deserialize)]
 struct Message {
     add_brightness: Option<f32>,
@@ -102,6 +98,11 @@ impl Provider for Brightness {
                         self.now -= percentage.abs() as u64 * self.max;
                     }
                 }
+                let display = self.args.display.clone();
+                let now = self.now;
+                std::thread::spawn(move || {
+                    std::fs::write(format!("/sys/class/backlight/{}", display), now.to_string())
+                });
             }
         }
 
@@ -109,7 +110,7 @@ impl Provider for Brightness {
     }
     fn format<'a>(&'a self) -> color_eyre::Result<Self::Fmt<'a>> {
         Ok(BrightnessFormat {
-            brighness: (self.max * 100 / self.now) as u8,
+            brighness: (self.now * 100 / self.max) as u8,
         })
     }
 }
