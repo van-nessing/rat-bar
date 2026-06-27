@@ -68,7 +68,7 @@ impl Provider for Battery {
         let charge = ((self.now * 100).checked_div(self.full))
             .unwrap_or(0)
             .min(100) as u8;
-        let status = &self.status;
+        let status = &self.status.trim();
         let icon = match status.to_lowercase().as_str() {
             "charging" => {
                 let idx = ((self.args.charging_charge_icons.len() - 1) * charge as usize) / 100;
