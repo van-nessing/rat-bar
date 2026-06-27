@@ -93,7 +93,7 @@ impl Provider for Brightness {
             Event::Message(message) => {
                 if let Some(percentage) = message.add_brightness {
                     if percentage.is_sign_positive() {
-                        self.now += ((percentage.abs() as u64 * self.max) / 100).max(self.max);
+                        self.now += ((percentage.abs() as u64 * self.max) / 100).min(self.max);
                     } else {
                         self.now = self
                             .now
